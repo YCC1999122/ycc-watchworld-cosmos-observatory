@@ -581,6 +581,11 @@
   /* 折叠箭头：桌面端隐藏，面板恒展开 */
   .status .fold-ic { display: none; }
 
+  /* 界面信息关闭：隐藏实时状态与说明文字（!important 压过 JS 内联 display） */
+  body.ui-hidden .status,
+  body.ui-hidden .scale-note,
+  body.ui-hidden .hint { display: none !important; }
+
   @media (max-width: 960px) {
     .status { width: 200px; padding: 14px; }
     .scale-note { display: none; }
@@ -863,6 +868,7 @@
       <input type="range" id="refScale" min="20" max="300" value="100">
     </div>
     <button class="btn-toggle on" id="btnRef" style="display:none">地面参照物：开</button>
+    <button class="btn-toggle on" id="btnUI" title="显示/关闭实时状态与说明文字">界面信息：开</button>
     <button class="btn-toggle on" id="btnSat">卫星轨道：开</button>
     <button class="btn-toggle on" id="btnOrbit">月球轨道：开</button>
     <button class="btn-toggle on" id="btnPlanetOrbit" style="display:none">行星轨道：开</button>
@@ -1727,6 +1733,10 @@
     const _perp = new THREE.Vector3(), _perpUp = new THREE.Vector3();
     const _dir = new THREE.Vector3(), _camTmp = new THREE.Vector3();
     const _moonPrev = new THREE.Vector3(), _followDelta = new THREE.Vector3();   // 特写跟随：目标的帧间位移
+    const _watchPrevP = new THREE.Vector3();   // 观看月球：取景框架的帧间位移基准
+    // 地心观测：相机固定于地心，自管输入（拖拽环视 + 滚轮倍率），不占用轨道控制
+    let geoDrag = null, geoYaw = 0, geoPitch = Math.PI / 2, geoManual = false;
+    const _geoDir = new THREE.Vector3(), _geoLook = new THREE.Vector3();
 
     // 观看月球：相机位于地月连线的垂直方向并跟随月球，地球与月球同时留在画面内
     function watchPos() {
@@ -1763,7 +1773,7 @@
 
     function destPos() {
       if (view === 'geo') return new THREE.Vector3(0, 0.02, 0);
-      if (view === 'top') return new THREE.Vector3(0, 165, 0);
+      if (view === 'top') return new THREE.Vector3(0, 160, 38);   // 高位俯视（微偏机位避开极点奇异，保持拖拽可用）
       if (view === 'moon') return moonWorld().add(MOON_CAM_OFFSET);
       if (view === 'watch') return watchPos();
       if (view === 'earth') return EARTH_VIEW_POS;
@@ -1821,7 +1831,7 @@
       earthLabel.visible = !insideEarth;
 
       camera.up.set(0, 1, 0);
-      if (v === 'top') camera.up.set(0, 0, -1);
+      if (v === 'geo') geoManual = false;   // 进入地心观测时视线重新对准月球
 
       document.getElementById('zoomCtl').style.display = zoomRange() > 1 ? 'flex' : 'none';
 
@@ -1845,9 +1855,10 @@
         camera.lookAt(controls.target);
         if (trans.t >= 1) {
           trans = null;
-          if (view === 'free' || view === 'moon') {
-            controls.enabled = true;   // 自由/特写视角：过渡完立即释放鼠标
+          if (view !== 'geo') {
+            controls.enabled = true;   // 除地心观测外所有视角：过渡完立即释放鼠标
             if (view === 'moon') _moonPrev.copy(moonWorld());
+            if (view === 'watch') _watchPrevP.copy(watchPos());
           }
         }
         return;
@@ -1864,9 +1875,16 @@
 
       if (view === 'geo') {
         camera.position.copy(destPos());
-        const t = destTarget();
-        controls.target.copy(t);
-        camera.lookAt(t);
+        if (geoManual) {
+          // 手动环视：拖拽后保持当前朝向（望远镜式定点观测）
+          _geoDir.setFromSphericalCoords(1, geoPitch, geoYaw);
+          _geoLook.copy(camera.position).add(_geoDir);
+          camera.lookAt(_geoLook);
+        } else {
+          const t = destTarget();
+          controls.target.copy(t);
+          camera.lookAt(t);
+        }
       } else if (view === 'moon') {
         // 月球特写：相机随月球公转平移，鼠标始终可拖拽环绕/滚轮缩放
         const m = moonWorld();
@@ -1876,23 +1894,55 @@
         _moonPrev.copy(m);
         controls.update();
       } else if (view === 'watch') {
-        camera.position.copy(watchPos());
+        // 观看月球：相机随取景框架平移，拖拽环绕/滚轮缩放始终可用
+        const wp = watchPos();
+        _followDelta.copy(wp).sub(_watchPrevP);
+        camera.position.add(_followDelta);
         controls.target.copy(destTarget());
-        camera.lookAt(controls.target);
-      } else if (view === 'earth') {
-        camera.position.copy(EARTH_VIEW_POS);
+        _watchPrevP.copy(wp);
+        controls.update();
+      } else if (view === 'earth' || view === 'top') {
+        // 地球近景 / 俯视全景：场景静止，释放轨道控制（绕地球环绕 + 缩放）
         controls.target.set(0, 0, 0);
-        camera.lookAt(0, 0, 0);
+        controls.update();
       } else if (view === 'free') {
         controls.update();
-      } else if (view === 'top') {
-        camera.position.copy(destPos());
-        camera.lookAt(0, 0, 0);
       }
     }
 
     document.querySelectorAll('#viewsEarth .btn-view').forEach(b =>
       b.addEventListener('click', () => setView(b.dataset.view)));
+
+    /* 地心观测输入：拖拽环视（球坐标朝向）+ 滚轮调节观测倍率（与倍率滑块联动） */
+    renderer.domElement.addEventListener('pointerdown', e => {
+      if (systemMode !== 'earthmoon' || view !== 'geo' || trans || modeAnim) return;
+      // 拖拽起点取当前视线方向（初始为月球方向），转球坐标
+      _geoDir.copy(destTarget()).sub(camera.position);
+      const sph = new THREE.Spherical().setFromVector3(_geoDir);
+      geoYaw = sph.theta;
+      geoPitch = sph.phi;
+      geoManual = true;
+      geoDrag = { x: e.clientX, y: e.clientY };
+      renderer.domElement.style.cursor = 'grabbing';
+    });
+    window.addEventListener('pointermove', e => {
+      if (!geoDrag) return;
+      const dx = e.clientX - geoDrag.x, dy = e.clientY - geoDrag.y;
+      geoDrag.x = e.clientX; geoDrag.y = e.clientY;
+      geoYaw -= dx * 0.0028;                 // 与地表观测一致的"抓取天空"手感
+      geoPitch = THREE.MathUtils.clamp(geoPitch - dy * 0.0028, 0.05, Math.PI - 0.05);
+    });
+    window.addEventListener('pointerup', () => {
+      if (!geoDrag) return;
+      geoDrag = null;
+      renderer.domElement.style.cursor = '';
+    });
+    renderer.domElement.addEventListener('wheel', e => {
+      if (systemMode !== 'earthmoon' || view !== 'geo' || trans || modeAnim) return;
+      e.preventDefault();
+      zoomSlider.value = THREE.MathUtils.clamp(Number(zoomSlider.value) - e.deltaY * 0.05, 0, 100);
+      readZoom();
+    }, { passive: false });
 
     /* ================================================================
        播放与速度控制
@@ -1950,6 +2000,19 @@
     }
     zoomSlider.addEventListener('input', readZoom);
     readZoom();
+
+    /* ================================================================
+       界面信息显示开关（关闭实时状态与说明文字，保留功能控件）
+    ================================================================ */
+    let showUI = true;
+    const btnUI = document.getElementById('btnUI');
+    function updateUIToggle() {
+      document.body.classList.toggle('ui-hidden', !showUI);
+      btnUI.textContent = showUI ? '界面信息：开' : '界面信息：关';
+      btnUI.classList.toggle('on', showUI);
+    }
+    btnUI.addEventListener('click', () => { showUI = !showUI; updateUIToggle(); });
+    updateUIToggle();
 
     /* ================================================================
        卫星显示开关
