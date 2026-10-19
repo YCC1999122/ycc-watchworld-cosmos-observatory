@@ -1,0 +1,4079 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>地月系统 · WatchWorld</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body { height: 100%; overflow: hidden; }
+
+  body {
+    font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+    background: #05070d;
+    color: #e8edf7;
+  }
+
+  #app { position: fixed; inset: 0; }
+  #app canvas { display: block; }
+
+  /* ============ 加载遮罩 ============ */
+  .loading {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background: #05070d;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    transition: opacity 0.8s;
+  }
+
+  .loading.hide { opacity: 0; pointer-events: none; }
+
+  .spinner {
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    border: 3px solid rgba(110, 168, 255, 0.18);
+    border-top-color: #6ea8ff;
+    animation: spin 0.9s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .loading .txt { font-size: 12px; letter-spacing: 3px; color: #7ea6e0; }
+
+  /* ============ 玻璃面板通用 ============ */
+  .glass {
+    background: rgba(13, 19, 34, 0.58);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(120, 160, 230, 0.16);
+    border-radius: 14px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+  }
+
+  /* ============ 顶部标题 ============ */
+  .topbar {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 16px 10px 12px;
+  }
+
+  .back {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px; height: 32px;
+    border-radius: 9px;
+    color: #8fb6f0;
+    text-decoration: none;
+    font-size: 15px;
+    background: rgba(94, 140, 220, 0.12);
+    border: 1px solid rgba(94, 140, 220, 0.22);
+    transition: background 0.25s, transform 0.25s;
+  }
+
+  .back:hover { background: rgba(94, 140, 220, 0.24); transform: translateX(-2px); }
+
+  .title-block .t1 {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    background: linear-gradient(110deg, #e6eeff 30%, #6ea8ff 80%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .title-block .t2 {
+    font-size: 10px;
+    letter-spacing: 3px;
+    color: #6b7893;
+    margin-top: 2px;
+  }
+
+  /* ============ 状态面板 ============ */
+  .status {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 10;
+    width: 248px;
+    padding: 18px 18px 14px;
+  }
+
+  .status h3 {
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: #7ea6e0;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .status h3::before {
+    content: "";
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #6ea8ff, #4dd6e8);
+    box-shadow: 0 0 8px rgba(110, 168, 255, 0.8);
+  }
+
+  .row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 7px 0;
+    border-bottom: 1px dashed rgba(120, 160, 230, 0.12);
+  }
+
+  .row:last-of-type { border-bottom: none; }
+
+  .row .k { font-size: 12px; color: #8b96ad; letter-spacing: 1px; }
+  .row .v { font-size: 13px; color: #dfe8f8; font-variant-numeric: tabular-nums; }
+  .row .v em { font-style: normal; font-size: 11px; color: #7ea6e0; margin-left: 3px; }
+
+  .phase-box {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 0 6px;
+    margin-top: 4px;
+    border-top: 1px solid rgba(120, 160, 230, 0.14);
+  }
+
+  #phaseCanvas {
+    width: 58px; height: 58px;
+    border-radius: 50%;
+    box-shadow: 0 0 18px rgba(180, 200, 255, 0.15), inset 0 0 12px rgba(0,0,0,0.4);
+    flex-shrink: 0;
+  }
+
+  .phase-info .name { font-size: 16px; font-weight: 600; color: #eaf1ff; letter-spacing: 1px; }
+  .phase-info .pct { font-size: 11px; color: #8b96ad; margin-top: 4px; font-variant-numeric: tabular-nums; }
+
+  .note {
+    margin-top: 10px;
+    font-size: 10px;
+    line-height: 1.7;
+    color: #5f6b84;
+  }
+
+  /* ============ 底部控制栏 ============ */
+  .controls {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 14px;
+    row-gap: 10px;
+    max-width: 94vw;
+    padding: 12px 18px;
+  }
+
+  .btn-play {
+    width: 42px; height: 42px;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    color: #fff;
+    font-size: 15px;
+    background: linear-gradient(135deg, #3b82f6, #06b6d4);
+    box-shadow: 0 4px 16px rgba(59, 130, 246, 0.35);
+    transition: transform 0.2s, box-shadow 0.2s, filter 0.2s;
+  }
+
+  .btn-play:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(59, 130, 246, 0.45); filter: brightness(1.08); }
+  .btn-play:active { transform: translateY(0); }
+
+  .speed {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 140px;
+  }
+
+  .speed label {
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: #7ea6e0;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .speed label b { color: #dfe8f8; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 4px;
+    border-radius: 4px;
+    background: linear-gradient(90deg, #3b82f6, #06b6d4);
+    outline: none;
+    cursor: pointer;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 15px; height: 15px;
+    border-radius: 50%;
+    background: #eaf1ff;
+    border: 2px solid #3b82f6;
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.6);
+    transition: transform 0.15s;
+  }
+
+  input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+
+  .divider { width: 1px; height: 34px; background: rgba(120, 160, 230, 0.18); }
+
+  /* ============ 卫星显示开关 ============ */
+  .btn-toggle {
+    padding: 9px 12px;
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: #9fb0cc;
+    background: rgba(94, 140, 220, 0.08);
+    border: 1px solid rgba(94, 140, 220, 0.2);
+    border-radius: 10px;
+    cursor: pointer;
+    font-family: inherit;
+    white-space: nowrap;
+    transition: all 0.25s;
+  }
+
+  .btn-toggle:hover { color: #dfe8f8; transform: translateY(-2px); border-color: rgba(110, 168, 255, 0.45); }
+
+  .btn-toggle.on {
+    color: #06212b;
+    background: linear-gradient(135deg, #4dd6e8, #6ea8ff);
+    border-color: transparent;
+    box-shadow: 0 4px 16px rgba(77, 214, 232, 0.3);
+  }
+
+  /* ============ 体系切换按钮（右上角） ============ */
+  .mode-bar {
+    position: fixed;
+    top: 20px;
+    right: 288px;
+    z-index: 11;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .btn-mode {
+    padding: 11px 18px;
+    font-size: 12px;
+    letter-spacing: 2px;
+    font-family: inherit;
+    color: #dfe8f8;
+    background: rgba(13, 19, 34, 0.58);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(120, 160, 230, 0.25);
+    border-radius: 12px;
+    cursor: pointer;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+    transition: transform 0.25s, border-color 0.25s, background 0.25s;
+  }
+
+  .btn-mode:hover {
+    transform: translateY(-2px);
+    border-color: rgba(110, 168, 255, 0.55);
+    background: rgba(94, 140, 220, 0.18);
+  }
+
+  .btn-mode.active {
+    color: #06212b;
+    background: linear-gradient(135deg, #4dd6e8, #6ea8ff);
+    border-color: transparent;
+    box-shadow: 0 6px 22px rgba(77, 214, 232, 0.28);
+  }
+
+  /* ============ 地面观测准星 ============ */
+  .crosshair {
+    position: fixed;
+    top: 50%; left: 50%;
+    width: 28px; height: 28px;
+    margin: -14px 0 0 -14px;
+    z-index: 9;
+    display: none;
+    pointer-events: none;
+    opacity: 0.7;
+  }
+
+  .crosshair::before, .crosshair::after {
+    content: "";
+    position: absolute;
+    background: rgba(198, 220, 255, 0.5);
+    box-shadow: 0 0 6px rgba(140, 190, 255, 0.45);
+  }
+
+  .crosshair::before { left: 50%; top: 0; width: 1px; height: 100%; margin-left: -0.5px; }
+  .crosshair::after { top: 50%; left: 0; height: 1px; width: 100%; margin-top: -0.5px; }
+
+  .views.disabled { opacity: 0.35; pointer-events: none; }
+
+  /* ============ 体系切换过场遮罩 ============ */
+  .mode-veil {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    opacity: 0;
+    background: radial-gradient(ellipse at center, rgba(5, 7, 13, 0.35) 0%, rgba(5, 7, 13, 0.88) 100%);
+  }
+
+  .veil-inner { text-align: center; }
+
+  .veil-title {
+    font-size: 30px;
+    font-weight: 600;
+    letter-spacing: 14px;
+    text-indent: 14px;
+    background: linear-gradient(110deg, #e6eeff 25%, #6ea8ff 75%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .veil-sub {
+    margin-top: 14px;
+    font-size: 11px;
+    letter-spacing: 5px;
+    color: #7ea6e0;
+  }
+
+  /* ============ 太阳方位小部件 ============ */
+  .sun-box {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 0 6px;
+    margin-top: 4px;
+    border-top: 1px solid rgba(120, 160, 230, 0.14);
+  }
+
+  #sunCanvas {
+    width: 58px; height: 58px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: radial-gradient(circle at 50% 50%, rgba(30, 42, 70, 0.55), rgba(12, 17, 32, 0.8));
+    box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.4), 0 0 14px rgba(120, 160, 230, 0.08);
+  }
+
+  .views { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+
+  .btn-view {
+    padding: 9px 11px;
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: #9fb0cc;
+    background: rgba(94, 140, 220, 0.08);
+    border: 1px solid rgba(94, 140, 220, 0.2);
+    border-radius: 10px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.25s;
+  }
+
+  .btn-view:hover { color: #dfe8f8; transform: translateY(-2px); border-color: rgba(110, 168, 255, 0.45); }
+
+  .btn-view.active {
+    color: #fff;
+    background: linear-gradient(135deg, #3b82f6, #06b6d4);
+    border-color: transparent;
+    box-shadow: 0 4px 16px rgba(59, 130, 246, 0.35);
+  }
+
+  /* ============ 左下提示 ============ */
+  .hint {
+    position: fixed;
+    bottom: 28px;
+    left: 20px;
+    z-index: 10;
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: #5f6b84;
+    padding: 8px 14px;
+    max-width: 300px;
+    line-height: 1.7;
+  }
+
+  .hint b { color: #8fb6f0; font-weight: 500; }
+
+  /* ============ 右下快速定位（地表观测：国家 / 极地） ============ */
+  #groundLocs {
+    position: fixed;
+    right: 20px;
+    bottom: 120px;
+    z-index: 11;
+    display: none;
+    max-width: 226px;
+    padding: 12px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+  }
+
+  #groundLocs .loc-title {
+    width: 100%;
+    margin-bottom: 2px;
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: #7ea6e0;
+    text-align: right;
+  }
+
+  /* ============ 右下比例说明 ============ */
+  .scale-note {
+    position: fixed;
+    bottom: 28px;
+    right: 20px;
+    z-index: 10;
+    pointer-events: none;   /* 纯说明文字：不拦截下方视角按钮的点击 */
+    font-size: 10px;
+    line-height: 1.8;
+    color: #4d576e;
+    text-align: right;
+    letter-spacing: 0.5px;
+  }
+
+  /* ============ WebGL 不可用提示 ============ */
+  .webgl-fallback {
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 12px;
+    color: #8b96ad;
+    font-size: 14px;
+    z-index: 50;
+  }
+
+  @media (max-width: 960px) {
+    .status { width: 200px; padding: 14px; }
+    .scale-note { display: none; }
+    .hint { display: none; }
+  }
+</style>
+</head>
+<body>
+
+  <div id="app"></div>
+
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    <div class="txt">正在加载真实天文纹理 · 1:1 比例</div>
+  </div>
+
+  <div class="webgl-fallback" id="fallback">
+    <div style="font-size:40px">🪐</div>
+    <div>当前浏览器不支持 WebGL，无法渲染 3D 场景</div>
+  </div>
+
+  <div class="topbar glass">
+    <a class="back" href="../../index.html" title="返回入口">←</a>
+    <div class="title-block">
+      <div class="t1" id="sysTitle">地月系统模拟</div>
+      <div class="t2" id="sysSub">WATCHWORLD · MODEL 01 · SCALE 1:1</div>
+    </div>
+  </div>
+
+  <div class="mode-bar">
+    <button class="btn-mode" id="btnGround" title="站在地球表面仰望星空">地表观测</button>
+    <button class="btn-mode" id="btnEM" title="地心参考系：地球固定于原点，月球绕地球运行">地月系统</button>
+    <button class="btn-mode" id="btnSolar" title="日心参考系：太阳位于原点，八大行星按真实轨道运行">太阳系模拟</button>
+    <button class="btn-mode" id="btnGalaxy" title="棒旋星系简化模型：银心黑洞、旋臂、太阳位置与银河自转">银河系模拟</button>
+    <button class="btn-mode" id="btnSuper" title="拉尼亚凯亚超星系团：丝状结构、巨引源流动与本星系群">超星系团</button>
+    <button class="btn-mode" id="btnCosmic" title="宇宙网大尺度结构：节点、丝状结构与空洞，形似神经网络">宇宙网</button>
+  </div>
+
+  <div class="status glass" id="statusEarth">
+    <h3>实时状态</h3>
+    <div class="row"><span class="k">模拟时间</span><span class="v" id="vTime">第 0 天 00:00</span></div>
+    <div class="row"><span class="k">地球自转</span><span class="v" id="vSpin">0 <em>圈</em></span></div>
+    <div class="row"><span class="k">月球公转</span><span class="v" id="vOrbit">0 <em>圈</em></span></div>
+    <div class="row"><span class="k">月地距离</span><span class="v" id="vDist">384,400 <em>km</em></span></div>
+    <div class="phase-box">
+      <canvas id="phaseCanvas" width="116" height="116"></canvas>
+      <div class="phase-info">
+        <div class="name" id="vPhase">新月</div>
+        <div class="pct" id="vPhasePct">照亮 0%</div>
+      </div>
+    </div>
+    <div class="sun-box">
+      <canvas id="sunCanvas" width="116" height="116"></canvas>
+      <div class="phase-info">
+        <div class="name">太阳方位</div>
+        <div class="pct" id="vSunRel">在视野前方</div>
+      </div>
+    </div>
+    <div class="note">地心参考系：地球固定于原点，月球绕地球运行。1:1 真实比例，月球沿真实椭圆轨道运动（开普勒方程求解），月相由真实几何位置计算。</div>
+    <div class="note" id="satNote">卫星轨道高度为真实值（LEO 408 km / MEO 20,200 km / GEO 35,786 km）；卫星本体尺寸已放大以便观察。</div>
+  </div>
+
+  <div class="status glass" id="statusSolar" style="display:none">
+    <h3>实时状态</h3>
+    <div class="row"><span class="k">模拟时间</span><span class="v" id="vSTime">第 0 天 00:00</span></div>
+    <div class="row"><span class="k">地球公转</span><span class="v" id="vSEarth">0 <em>圈</em></span></div>
+    <div class="row"><span class="k">当前视角</span><span class="v" id="vSView">自由视角</span></div>
+    <div class="note">日心参考系：太阳位于原点，八大行星按真实半长轴、偏心率与公转周期运行（开普勒方程求解）。1:1 真实比例，行星本体为真实半径；定位光标与标签仅用于指示位置。</div>
+  </div>
+
+  <div class="status glass" id="statusGround" style="display:none">
+    <h3>观测状态</h3>
+    <div class="row"><span class="k">模拟时间</span><span class="v" id="vGTime">第 0 天 00:00</span></div>
+    <div class="row"><span class="k">观测位置</span><span class="v" id="vGLoc">0.0°N 0.0°E</span></div>
+    <div class="row"><span class="k">太阳高度角</span><span class="v" id="vGSunAlt">0.0°</span></div>
+    <div class="row"><span class="k">天空状态</span><span class="v" id="vGSky">夜间</span></div>
+    <div class="row"><span class="k">月相</span><span class="v" id="vGMoonPhase">—</span></div>
+    <div class="row"><span class="k">月亮方位</span><span class="v" id="vGMoonPos">—</span></div>
+    <div class="note">地面观测参考系：观测点位于地球表面，天体按真实轨道运行。天空颜色与星空亮度由太阳高度角决定；当前为晴朗无云模型，暂不含云量变化。右下角可快速切换到各国首都与两极。</div>
+  </div>
+
+  <div class="status glass" id="statusGalaxy" style="display:none">
+    <h3>银河状态</h3>
+    <div class="row"><span class="k">模拟时间</span><span class="v" id="vGalTime">0.00 百万年</span></div>
+    <div class="row"><span class="k">太阳绕银心</span><span class="v" id="vGalSun">0.0%</span></div>
+    <div class="row"><span class="k">银河自转</span><span class="v">差速 · 内快外慢</span></div>
+    <div class="row"><span class="k">当前视角</span><span class="v" id="vGalView">自由视角</span></div>
+    <div class="note">银河系为程序化简化模型：差速自转（平坦旋转曲线，内圈恒星明显快于外圈），旋臂由椭圆轨道进动形成并整体缓慢进动。银心为黑洞人马座 A*（吸积盘艺术化示意，内层快外层慢）。太阳标记以真实角速度绕银心公转（约 2.25 亿年一圈）、长期保持在猎户支臂内；行星系为斜置小圆盘（黄道面与银盘面约 60°）跟随太阳整体飞行，公转/自转周期比例真实、时间压缩 3e-7——太阳绕银心一圈期间地球绕日约 67 圈（真实为 2.25 亿圈），更高倍率无法逐帧呈现。</div>
+  </div>
+
+  <div class="status glass" id="statusSuper" style="display:none">
+    <h3>超星系团状态</h3>
+    <div class="row"><span class="k">模拟时间</span><span class="v" id="vSuperTime">0.00 亿年</span></div>
+    <div class="row"><span class="k">本星系群流速</span><span class="v">600 km/s 流向巨引源</span></div>
+    <div class="row"><span class="k">已流距离</span><span class="v" id="vSuperFlow">0.0 万光年</span></div>
+    <div class="row"><span class="k">当前视角</span><span class="v" id="vSuperView">自由视角</span></div>
+    <div class="note">拉尼亚凯亚超星系团为程序化简化模型：直径约 5.2 亿光年，星系沿丝状结构流向巨引源（约 1.6 亿光年外矩尺座方向，真实流速约 600 km/s，走完这段路约需 1600 亿年，本模拟按时间流速演示流动）。本星系群（银河系 + M31 + M33）在此尺度下仅为光点标记，细节请切换「银河系模拟」。时间流速档位整体再上一个数量级：最高约 50 亿年/秒。</div>
+  </div>
+
+  <div class="status glass" id="statusCosmic" style="display:none">
+    <h3>宇宙网状态</h3>
+    <div class="row"><span class="k">模拟时间</span><span class="v" id="vCosTime">0.00 亿年</span></div>
+    <div class="row"><span class="k">膨胀系数</span><span class="v" id="vCosScale">×1.000</span></div>
+    <div class="row"><span class="k">当前视角</span><span class="v" id="vCosView">自由视角</span></div>
+    <div class="note">宇宙网为程序化简化模型：超星系团与星系团构成节点，丝状结构相互交错连接，节点之间是几乎空无一物的巨大空洞，整体形似大脑神经网络（类比示意，非真实星表）。丝内有物质缓慢流动（示意速度），整个网络按哈勃膨胀缓慢撑开（演示用减速速率，膨胀系数达 ×2.0 后保持稳定）。拉尼亚凯亚超星系团（我们所在）为脉动光点标记，细节请切换「超星系团模拟」。时间流速档位再上一档：最高约 500 亿年/秒。</div>
+  </div>
+
+  <div class="controls glass">
+    <button class="btn-play" id="btnPlay" title="空格键 播放/暂停">❚❚</button>
+    <div class="speed">
+      <label><span>时间流速</span><b id="vSpeed">×1.0</b></label>
+      <input type="range" id="speed" min="0" max="100" value="43">
+    </div>
+    <div class="speed" id="zoomCtl" style="display:none">
+      <label><span>观测倍率</span><b id="vZoom">×15</b></label>
+      <input type="range" id="zoom" min="0" max="100" value="66">
+    </div>
+    <div class="divider"></div>
+    <div class="views" id="viewsEarth">
+      <button class="btn-view active" data-view="free">自由视角</button>
+      <button class="btn-view" data-view="earth">地球近景</button>
+      <button class="btn-view" data-view="watch">观看月球</button>
+      <button class="btn-view" data-view="geo">地心观测</button>
+      <button class="btn-view" data-view="moon">月球特写</button>
+      <button class="btn-view" data-view="top">俯视全景</button>
+    </div>
+    <div class="views" id="viewsSolar" style="display:none">
+      <button class="btn-view" data-sview="free">自由视角</button>
+      <button class="btn-view" data-sview="top">俯视全景</button>
+      <button class="btn-view" data-sview="sun">太阳特写</button>
+      <button class="btn-view" data-sview="p0">水星</button>
+      <button class="btn-view" data-sview="p1">金星</button>
+      <button class="btn-view" data-sview="p2">地球</button>
+      <button class="btn-view" data-sview="p3">火星</button>
+      <button class="btn-view" data-sview="p4">木星</button>
+      <button class="btn-view" data-sview="p5">土星</button>
+      <button class="btn-view" data-sview="p6">天王星</button>
+      <button class="btn-view" data-sview="p7">海王星</button>
+    </div>
+    <div class="views" id="viewsGround" style="display:none">
+      <button class="btn-view" data-gdir="N">朝北</button>
+      <button class="btn-view" data-gdir="E">朝东</button>
+      <button class="btn-view" data-gdir="S">朝南</button>
+      <button class="btn-view" data-gdir="W">朝西</button>
+      <button class="btn-view" data-gdir="Z">抬头</button>
+      <button class="btn-view" data-glook="sun">看太阳</button>
+      <button class="btn-view" data-glook="moon">看月亮</button>
+    </div>
+    <div class="views" id="viewsGalaxy" style="display:none">
+      <button class="btn-view active" data-gv="free">自由视角</button>
+      <button class="btn-view" data-gv="top">俯视全景</button>
+      <button class="btn-view" data-gv="edge">侧视全景</button>
+      <button class="btn-view" data-gv="center">银心黑洞</button>
+      <button class="btn-view" data-gv="sun">太阳位置</button>
+    </div>
+    <div class="views" id="viewsSuper" style="display:none">
+      <button class="btn-view active" data-sv="free">自由视角</button>
+      <button class="btn-view" data-sv="top">俯视全景</button>
+      <button class="btn-view" data-sv="edge">侧视全景</button>
+      <button class="btn-view" data-sv="local">本星系群</button>
+      <button class="btn-view" data-sv="ga">巨引源</button>
+    </div>
+    <div class="views" id="viewsCosmic" style="display:none">
+      <button class="btn-view active" data-cv="free">自由视角</button>
+      <button class="btn-view" data-cv="top">俯视全景</button>
+      <button class="btn-view" data-cv="edge">侧视全景</button>
+      <button class="btn-view" data-cv="lan">拉尼亚凯亚</button>
+    </div>
+    <div class="speed" id="refCtl" style="display:none">
+      <label><span>参照物大小</span><b id="vRef">×1.00</b></label>
+      <input type="range" id="refScale" min="20" max="300" value="100">
+    </div>
+    <button class="btn-toggle on" id="btnRef" style="display:none">地面参照物：开</button>
+    <button class="btn-toggle on" id="btnSat">卫星轨道：开</button>
+    <button class="btn-toggle on" id="btnOrbit">月球轨道：开</button>
+    <button class="btn-toggle on" id="btnPlanetOrbit" style="display:none">行星轨道：开</button>
+    <button class="btn-toggle on" id="btnArms" style="display:none">旋臂标注：开</button>
+    <button class="btn-toggle on" id="btnFlow" style="display:none">结构标注：开</button>
+    <button class="btn-toggle on" id="btnWeb" style="display:none">网络标注：开</button>
+  </div>
+
+  <!-- 右下角：地表观测快速定位（点击即切换到该国首都 / 极地） -->
+  <div class="views glass" id="groundLocs">
+    <div class="loc-title">快速定位 · 点击切换观测点</div>
+    <button class="btn-view active" data-gpos="0">赤道</button>
+    <button class="btn-view" data-gpos="1">北京</button>
+    <button class="btn-view" data-gpos="2">华盛顿</button>
+    <button class="btn-view" data-gpos="3">莫斯科</button>
+    <button class="btn-view" data-gpos="4">巴黎</button>
+    <button class="btn-view" data-gpos="5">北极</button>
+    <button class="btn-view" data-gpos="6">南极</button>
+  </div>
+
+  <div class="hint glass" id="hint">自由视角 · <b>拖拽</b> 旋转 &nbsp;·&nbsp; <b>滚轮</b> 缩放</div>
+
+  <div class="crosshair" id="crosshair"></div>
+
+  <div class="scale-note" id="scaleNote">
+    地心参考系：地球固定于原点，月球绕地球运行（1 单位 = 6,371 km 地球半径）<br>
+    月球轨道半长轴 384,400 km · 偏心率 0.0549 · 近地点 363,300 km · 远地点 405,500 km<br>
+    太阳固定于同一方向：半径 696,340 km · 距离 1 天文单位（视直径约 0.53°）<br>
+    卫星轨道高度为真实值，卫星本体尺寸已放大以便观察
+  </div>
+
+  <div class="mode-veil" id="modeVeil">
+    <div class="veil-inner">
+      <div class="veil-title" id="veilTitle">太阳系模拟</div>
+      <div class="veil-sub" id="veilSub">SCALE 1:1 · 日心参考系 · 八大行星真实轨道</div>
+    </div>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    /* ================================================================
+       1:1 真实比例：1 单位 = 1 地球半径 = 6,371 km
+    ================================================================ */
+    const KM_PER_UNIT  = 6371;
+    const EARTH_RADIUS = 1;
+    const MOON_RADIUS  = 1737.4 / 6371;          // 0.2727
+    const ORBIT_A      = 384400 / 6371;          // 轨道半长轴 60.34（384,400 km）
+    const ORBIT_E      = 0.0549;                 // 真实轨道偏心率
+    const ORBIT_B      = ORBIT_A * Math.sqrt(1 - ORBIT_E * ORBIT_E);
+    const MOON_PERIOD  = 27.3217;                // 恒星月（天）
+    const SIDEREAL_DAY = 0.99727;                // 恒星日（天）
+    const AXIAL_TILT   = 23.44 * Math.PI / 180;
+    const ORBIT_INCL   = 5.145 * Math.PI / 180;
+    const SUN_RADIUS   = 696340 / 6371;          // 109.3
+    const SUN_DISTANCE = 149597870 / 6371;       // 1 AU ≈ 23481
+    const BASE_RATE    = 0.15;                   // 1x 时每现实秒推进的模拟天数
+    const BASE_FOV     = 55;
+    const WATCH_D      = ORBIT_A * 1.03;         // 观看月球：相机到地月连线的垂直距离
+    const WATCH_TILT   = 20 * Math.PI / 180;     // 垂直平面内抬高的角度（略带俯角）
+    const EARTH_VIEW_D = 9;                      // 地球近景相机距离（地球半径）
+
+    /* ================================================================
+       渲染器 / 场景 / 相机
+    ================================================================ */
+    let renderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+    } catch (e) {
+      document.getElementById('fallback').style.display = 'flex';
+      document.getElementById('loading').classList.add('hide');
+      throw e;
+    }
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    const maxAniso = renderer.capabilities.getMaxAnisotropy();
+    document.getElementById('app').appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x000005);
+
+    const camera = new THREE.PerspectiveCamera(BASE_FOV, window.innerWidth / window.innerHeight, 0.05, 150000);
+    camera.position.set(-252, -44, 65);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+    controls.minDistance = 1.45;
+    controls.maxDistance = 30000;
+
+    /* ================================================================
+       真实纹理加载
+    ================================================================ */
+    const loader = new THREE.TextureLoader();
+    let texTotal = 0, texDone = 0;
+    const loadingEl = document.getElementById('loading');
+
+    function loadTex(file, srgb = true) {
+      texTotal++;
+      const tex = loader.load(`assets/${file}`, () => {
+        texDone++;
+        if (texDone >= texTotal) loadingEl.classList.add('hide');
+      }, undefined, () => {
+        texDone++;
+        console.warn(`texture failed to load: ${file}`);
+        if (texDone >= texTotal) loadingEl.classList.add('hide');
+      });
+      if (srgb) tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = maxAniso;
+      return tex;
+    }
+
+    // 真实银河系全景背景（我们身处银河系之内）
+    const milkyWayTex = loadTex('milkyway.jpg');
+    milkyWayTex.mapping = THREE.EquirectangularReflectionMapping;
+    scene.background = milkyWayTex;
+    scene.backgroundRotation = new THREE.Euler(0, 1.85, 0);   // 银河带保持在水平视线方向
+
+    const earthDayTex   = loadTex('earth_day.jpg');     // NASA Blue Marble 8K
+    const earthNightTex = loadTex('earth_night.jpg');   // 夜间城市灯光
+    const cloudTex      = loadTex('earth_clouds.jpg', false); // 云层（用作透明通道）
+    const moonTex       = loadTex('moon.jpg');          // 真实月面 2K
+
+    /* ================================================================
+       光照（太阳位于真实 1 AU 方向）
+    ================================================================ */
+    const sunDir = new THREE.Vector3(1, 0.22, 0.38).normalize();
+    const sunPosition = sunDir.clone().multiplyScalar(SUN_DISTANCE);
+    const earthSunDir = sunDir.clone();   // 从地球指向太阳的单位向量（太阳系模式下逐帧更新）
+
+    const sunLight = new THREE.DirectionalLight(0xfff4e0, 2.6);
+    sunLight.position.copy(sunDir).multiplyScalar(100);
+    scene.add(sunLight);
+    scene.add(new THREE.AmbientLight(0x28344e, 0.4));
+
+    /* ================================================================
+       太阳（真实半径，真实距离：视直径约 0.53°）
+    ================================================================ */
+    // 太阳整体为一组：地月模式位于 1 AU 外，太阳系模式平滑移动到原点
+    const sunGroup = new THREE.Group();
+    sunGroup.position.copy(sunPosition);
+    scene.add(sunGroup);
+
+    // 光球层程序化纹理：米粒组织（明暗颗粒）+ 黑子群
+    function makeSunTexture() {
+      const S = 512;
+      const c = document.createElement('canvas');
+      c.width = c.height = S;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#ff9a2e';
+      ctx.fillRect(0, 0, S, S);
+      // 米粒组织：数千个明暗交织的小颗粒
+      for (let i = 0; i < 5200; i++) {
+        const x = Math.random() * S, y = Math.random() * S;
+        const r = 0.8 + Math.random() * 3.6;
+        if (Math.random() > 0.42) {
+          ctx.fillStyle = `rgba(255,${205 + (Math.random() * 45 | 0)},${120 + (Math.random() * 60 | 0)},0.10)`;
+        } else {
+          ctx.fillStyle = `rgba(${170 + (Math.random() * 40 | 0)},60,15,0.08)`;
+        }
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+      }
+      // 黑子群（多分布于中低纬度带）
+      for (let i = 0; i < 16; i++) {
+        const x = Math.random() * S, y = S * 0.2 + Math.random() * S * 0.6;
+        const r = 2.5 + Math.random() * 6;
+        const g = ctx.createRadialGradient(x, y, 0, x, y, r * 2.2);
+        g.addColorStop(0, 'rgba(70,26,8,0.55)');
+        g.addColorStop(0.55, 'rgba(120,50,12,0.28)');
+        g.addColorStop(1, 'rgba(120,50,12,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(x, y, r * 2.2, 0, Math.PI * 2); ctx.fill();
+      }
+      const t = new THREE.CanvasTexture(c);
+      t.colorSpace = THREE.SRGBColorSpace;
+      return t;
+    }
+
+    // 太阳本体：光球纹理 + 临边昏暗（边缘明显变暗，呈现球体体积感）
+    const sunMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(SUN_RADIUS, 64, 64),
+      new THREE.ShaderMaterial({
+        uniforms: { map: { value: makeSunTexture() } },
+        vertexShader: `
+          varying vec2 vUv;
+          varying vec3 vN;
+          varying vec3 vV;
+          void main() {
+            vUv = uv;
+            vN = normalize(normalMatrix * normal);
+            vec4 mv = modelViewMatrix * vec4(position, 1.0);
+            vV = -mv.xyz;
+            gl_Position = projectionMatrix * mv;
+          }`,
+        fragmentShader: `
+          uniform sampler2D map;
+          varying vec2 vUv;
+          varying vec3 vN;
+          varying vec3 vV;
+          void main() {
+            vec3 base = texture2D(map, vUv).rgb;
+            float limb = pow(clamp(dot(normalize(vN), normalize(vV)), 0.0, 1.0), 0.7);
+            gl_FragColor = vec4(base * mix(0.42, 1.22, limb), 1.0);
+          }`
+      })
+    );
+    sunGroup.add(sunMesh);
+
+    function makeGlowSprite(inner, outer, size, depthTest = false) {
+      const c = document.createElement('canvas');
+      c.width = c.height = 256;
+      const ctx = c.getContext('2d');
+      const g = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
+      g.addColorStop(0, inner);
+      g.addColorStop(0.4, outer);
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, 256, 256);
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: new THREE.CanvasTexture(c),
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        depthTest,
+        transparent: true
+      }));
+      sp.scale.setScalar(size);
+      sp.renderOrder = 10;
+      return sp;
+    }
+    // 日冕纹理：内晕 + 放射状冕流（远看呈恒星光芒，而非一团均匀光焰）
+    function makeCoronaSprite(size) {
+      const S = 512, C = S / 2;
+      const c = document.createElement('canvas');
+      c.width = c.height = S;
+      const ctx = c.getContext('2d');
+      // 内晕
+      let g = ctx.createRadialGradient(C, C, 0, C, C, C);
+      g.addColorStop(0, 'rgba(255,246,220,0.85)');
+      g.addColorStop(0.18, 'rgba(255,214,140,0.38)');
+      g.addColorStop(0.45, 'rgba(255,170,80,0.12)');
+      g.addColorStop(1, 'rgba(255,150,60,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, S, S);
+      // 放射状日冕流
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < 220; i++) {
+        const ang = Math.random() * Math.PI * 2;
+        const len = C * (0.35 + Math.random() * 0.6);
+        const x2 = C + Math.cos(ang) * len, y2 = C + Math.sin(ang) * len;
+        const lg = ctx.createLinearGradient(C, C, x2, y2);
+        const a = 0.05 + Math.random() * 0.12;
+        lg.addColorStop(0, `rgba(255,236,190,${a})`);
+        lg.addColorStop(1, 'rgba(255,170,90,0)');
+        ctx.strokeStyle = lg;
+        ctx.lineWidth = 0.6 + Math.random() * 2.2;
+        ctx.beginPath(); ctx.moveTo(C, C); ctx.lineTo(x2, y2); ctx.stroke();
+      }
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: new THREE.CanvasTexture(c),
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        depthTest: false,
+        transparent: true
+      }));
+      sp.scale.setScalar(size);
+      sp.renderOrder = 10;
+      return sp;
+    }
+    const sunCore = makeGlowSprite('rgba(255,253,244,1)', 'rgba(255,214,150,0.55)', 900);
+    const sunHalo = makeCoronaSprite(3400);
+    sunGroup.add(sunCore, sunHalo);
+
+    /* ================================================================
+       地球（自定义着色器：昼夜混合 + 城市灯光 + 海面高光 + 大气边缘）
+    ================================================================ */
+    const earthSystem = new THREE.Group();   // 位于原点（地心参考系）；太阳系模式下整体移至地球轨道位置
+    scene.add(earthSystem);
+    sunLight.target = earthSystem;           // 平行光始终照向地球（两种模式下方向都正确）
+
+    const earthTilt = new THREE.Group();
+    earthTilt.rotation.z = -AXIAL_TILT;
+    earthSystem.add(earthTilt);
+
+    const earthUniforms = {
+      dayMap:   { value: earthDayTex },
+      nightMap: { value: earthNightTex },
+      sunDirection: { value: earthSunDir }
+    };
+
+    const earthMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(EARTH_RADIUS, 96, 96),
+      new THREE.ShaderMaterial({
+        uniforms: earthUniforms,
+        vertexShader: `
+          varying vec2 vUv;
+          varying vec3 vNormalW;
+          varying vec3 vPosW;
+          void main() {
+            vUv = uv;
+            vNormalW = normalize(mat3(modelMatrix) * normal);
+            vec4 wp = modelMatrix * vec4(position, 1.0);
+            vPosW = wp.xyz;
+            gl_Position = projectionMatrix * viewMatrix * wp;
+          }`,
+        fragmentShader: `
+          uniform sampler2D dayMap;
+          uniform sampler2D nightMap;
+          uniform vec3 sunDirection;
+          varying vec2 vUv;
+          varying vec3 vNormalW;
+          varying vec3 vPosW;
+          void main() {
+            vec3 n = normalize(vNormalW);
+            vec3 viewDir = normalize(cameraPosition - vPosW);
+            float cosSun = dot(n, sunDirection);
+
+            vec3 dayCol = texture2D(dayMap, vUv).rgb;
+            vec3 nightCol = texture2D(nightMap, vUv).rgb;
+
+            // 昼夜过渡带
+            float dayMix = smoothstep(-0.08, 0.18, cosSun);
+            vec3 day = dayCol * (0.06 + 1.18 * clamp(cosSun, 0.0, 1.0));
+            vec3 night = nightCol * 1.75 + dayCol * 0.012;
+            vec3 col = mix(night, day, dayMix);
+
+            // 海面太阳高光（依据贴图蓝色通道估计海洋区域）
+            float ocean = smoothstep(0.03, 0.14, dayCol.b - dayCol.r);
+            vec3 refl = reflect(-sunDirection, n);
+            float spec = pow(max(dot(refl, viewDir), 0.0), 30.0) * ocean * dayMix;
+            col += vec3(0.95, 0.88, 0.72) * spec * 0.75;
+
+            // 大气瑞利散射边缘（向阳侧更亮）
+            float fres = pow(1.0 - max(dot(n, viewDir), 0.0), 3.0);
+            col += vec3(0.25, 0.5, 1.0) * fres * (0.22 + 0.78 * dayMix) * 0.85;
+
+            gl_FragColor = vec4(col, 1.0);
+          }`
+      })
+    );
+    earthTilt.add(earthMesh);
+
+    // 云层（受太阳光照射，昼亮夜暗）
+    const cloudMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(EARTH_RADIUS * 1.012, 64, 64),
+      new THREE.MeshLambertMaterial({
+        color: 0xffffff,
+        alphaMap: cloudTex,
+        transparent: true,
+        opacity: 0.9,
+        depthWrite: false
+      })
+    );
+    earthTilt.add(cloudMesh);
+
+    // 外层大气辉光
+    const atmoMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(EARTH_RADIUS * 1.07, 48, 48),
+      new THREE.ShaderMaterial({
+        vertexShader: `
+          varying vec3 vN;
+          void main() {
+            vN = normalize(normalMatrix * normal);
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }`,
+        fragmentShader: `
+          varying vec3 vN;
+          void main() {
+            float i = pow(0.66 - dot(vN, vec3(0.0, 0.0, 1.0)), 3.2);
+            gl_FragColor = vec4(0.32, 0.56, 1.0, 1.0) * i * 0.9;
+          }`,
+        blending: THREE.AdditiveBlending,
+        side: THREE.BackSide,
+        transparent: true,
+        depthWrite: false
+      })
+    );
+    earthSystem.add(atmoMesh);
+
+    /* ================================================================
+       人造卫星（轨道高度为真实值；卫星本体尺寸已放大以便观察）
+    ================================================================ */
+    const SAT_DEFS = [
+      { alt: 408,   inc: 51.6, color: 0xffd166 },   // 近地轨道（空间站高度）
+      { alt: 700,   inc: 98.0, color: 0x6ee7b7 },   // 太阳同步轨道
+      { alt: 20200, inc: 55.0, color: 0x93c5fd },   // 中圆轨道（导航卫星）
+      { alt: 23222, inc: 56.0, color: 0xc4b5fd },   // 中圆轨道
+      { alt: 35786, inc: 0.5,  color: 0xfca5a5 }    // 地球静止轨道
+    ];
+
+    const satGroup = new THREE.Group();
+    earthSystem.add(satGroup);
+
+    const satNodes = [];
+
+    function satGlow(colorHex, size) {
+      const c = new THREE.Color(colorHex);
+      const rgb = `${Math.round(c.r * 255)},${Math.round(c.g * 255)},${Math.round(c.b * 255)}`;
+      return makeGlowSprite(`rgba(${rgb},0.95)`, `rgba(${rgb},0.22)`, size, true);
+    }
+
+    SAT_DEFS.forEach((def, idx) => {
+      const aKm = 6371 + def.alt;                                   // 轨道半径（km，真实高度）
+      const a   = aKm / KM_PER_UNIT;                                // 轨道半径（地球半径）
+      // 开普勒第三定律：T = 2π√(a³/μ)，μ = 398,600.44 km³/s²
+      const periodDays = (2 * Math.PI * Math.sqrt(Math.pow(aKm, 3) / 398600.4418)) / 86400;
+
+      const plane = new THREE.Group();                              // 轨道面
+      plane.rotation.x = def.inc * Math.PI / 180;
+      plane.rotation.y = idx * 0.8;
+      satGroup.add(plane);
+
+      // 示意轨道线
+      const pts = [];
+      for (let i = 0; i <= 128; i++) {
+        const t = (i / 128) * Math.PI * 2;
+        pts.push(new THREE.Vector3(Math.cos(t) * a, 0, -Math.sin(t) * a));
+      }
+      plane.add(new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(pts),
+        new THREE.LineBasicMaterial({ color: def.color, transparent: true, opacity: 0.4 })
+      ));
+
+      // 卫星本体（星体 + 两侧太阳帆板）
+      const sat = new THREE.Group();
+      sat.add(new THREE.Mesh(
+        new THREE.BoxGeometry(0.024, 0.018, 0.018),
+        new THREE.MeshStandardMaterial({
+          color: def.color, roughness: 0.35, metalness: 0.5,
+          emissive: def.color, emissiveIntensity: 0.4
+        })
+      ));
+      const panelMat = new THREE.MeshStandardMaterial({
+        color: 0x1d4ed8, roughness: 0.25, metalness: 0.75,
+        emissive: 0x3b82f6, emissiveIntensity: 0.3
+      });
+      for (const sx of [-1, 1]) {
+        const panel = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.003, 0.016), panelMat);
+        panel.position.x = sx * 0.046;
+        sat.add(panel);
+      }
+      sat.add(satGlow(def.color, 0.16));                            // 远距离可见的光点
+      plane.add(sat);
+
+      satNodes.push({ sat, a, periodDays, phase: idx * 1.15 });
+    });
+
+    function updateSatellites() {
+      for (const n of satNodes) {
+        const th = (simDays / n.periodDays) * Math.PI * 2 + n.phase;
+        n.sat.position.set(Math.cos(th) * n.a, 0, -Math.sin(th) * n.a);
+      }
+    }
+
+    /* ================================================================
+       月球（真实椭圆轨道 + 开普勒方程）
+    ================================================================ */
+    const moonOrbit = new THREE.Group();     // 轨道面（含 5.1° 倾角）
+    moonOrbit.rotation.x = ORBIT_INCL;
+    earthSystem.add(moonOrbit);              // 挂在地球体系内：太阳系模式下月球随地球一起公转
+
+    const moonMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(MOON_RADIUS, 64, 64),
+      new THREE.MeshStandardMaterial({ map: moonTex, roughness: 0.97, metalness: 0 })
+    );
+    moonOrbit.add(moonMesh);
+
+    // 月亮柔光：仅在"地表仰望"时开启，亮度随月相亏损比例变化——
+    // 满月最亮（夜里一眼能找到方位），新月几乎消失，符合真实观感。
+    const moonGlowSprite = makeGlowSprite('rgba(236,242,255,0.60)', 'rgba(150,180,230,0.16)', 1.3);
+    moonMesh.add(moonGlowSprite);
+
+    // 真实椭圆轨道线（焦点位于地球）
+    const orbitPts = [];
+    for (let i = 0; i <= 256; i++) {
+      const E = (i / 256) * Math.PI * 2;
+      orbitPts.push(new THREE.Vector3(ORBIT_A * (Math.cos(E) - ORBIT_E), 0, -ORBIT_B * Math.sin(E)));
+    }
+    const orbitLine = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(orbitPts),
+      new THREE.LineBasicMaterial({ color: 0x6ea8ff, transparent: true, opacity: 0.45 })
+    );
+    moonOrbit.add(orbitLine);
+
+    // 开普勒方程求解：平近点角 -> 偏近点角 -> 真近点角 + 距离
+    function moonKepler(days) {
+      const M = 2 * Math.PI * (days / MOON_PERIOD);
+      let E = M;
+      for (let i = 0; i < 7; i++) {
+        E -= (E - ORBIT_E * Math.sin(E) - M) / (1 - ORBIT_E * Math.cos(E));
+      }
+      const nu = 2 * Math.atan2(
+        Math.sqrt(1 + ORBIT_E) * Math.sin(E / 2),
+        Math.sqrt(1 - ORBIT_E) * Math.cos(E / 2)
+      );
+      const r = ORBIT_A * (1 - ORBIT_E * Math.cos(E));
+      return { nu, r };
+    }
+
+    let lastMoonDistKm = 384400;
+    function updateBodies() {
+      const { nu, r } = moonKepler(simDays);
+      lastMoonDistKm = r * KM_PER_UNIT;
+      moonMesh.position.set(r * Math.cos(nu), 0, -r * Math.sin(nu));
+      // 潮汐锁定：始终以同一面朝向地球
+      moonMesh.lookAt(0, 0, 0);
+      // 地球自转（恒星日）
+      earthMesh.rotation.y = (simDays / SIDEREAL_DAY) * Math.PI * 2;
+      cloudMesh.rotation.y = (simDays / SIDEREAL_DAY) * Math.PI * 2 * 1.07;
+      moonLabel.position.set(moonMesh.position.x, moonMesh.position.y + 0.55, moonMesh.position.z);
+    }
+
+    /* ================================================================
+       天体标签（按相机距离缩放）
+    ================================================================ */
+    function makeLabel(text) {
+      const c = document.createElement('canvas');
+      c.width = 256; c.height = 96;
+      const ctx = c.getContext('2d');
+      ctx.font = '600 44px "Microsoft YaHei", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.shadowColor = 'rgba(0,0,0,0.9)';
+      ctx.shadowBlur = 10;
+      ctx.fillStyle = 'rgba(225,235,255,0.95)';
+      ctx.fillText(text, 128, 48);
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false
+      }));
+      return sp;
+    }
+
+    const earthLabel = makeLabel('地球');
+    earthLabel.position.set(0, -1.45, 0);
+    earthSystem.add(earthLabel);
+
+    const moonLabel = makeLabel('月球');
+    moonOrbit.add(moonLabel);
+
+    // 太阳标签（太阳固定在 1 AU 方向，不参与运动）
+    const sunLabel = makeLabel('太阳');
+    sunGroup.add(sunLabel);
+
+    function updateLabels() {
+      if (systemMode === 'ground') return;   // 地面视角不显示空间体系的天体标签
+      const de = camera.position.distanceTo(earthSystem.position);
+      earthLabel.scale.set(de * 0.022, de * 0.022 * 0.375, 1);
+      const dm = camera.position.distanceTo(moonWorld());
+      moonLabel.scale.set(dm * 0.018, dm * 0.018 * 0.375, 1);
+      const ds = camera.position.distanceTo(sunGroup.position);
+      sunLabel.scale.set(ds * 0.02, ds * 0.02 * 0.375, 1);
+      // 行星标签与定位光标：随相机距离缩放，保证在 1:1 比例下始终可辨
+      if (solarGroup.visible) {
+        for (const n of planetNodes) {
+          if (n.earth) continue;
+          const dp = camera.position.distanceTo(n.mesh.position);
+          n.label.scale.set(dp * 0.02, dp * 0.02 * 0.375, 1);
+          n.marker.scale.setScalar(dp * 0.012);
+        }
+      }
+    }
+
+    /* ================================================================
+       太阳系（1:1 真实距离 / 真实半径 / 真实公转周期，开普勒方程求解）
+    ================================================================ */
+    const PLANET_DEFS = [
+      { name: '水星',   a: 57909050,   e: 0.2056, T: 87.969,   r: 2439.7,  color: 0xb5a79a, tex: 'mercury.jpg' },
+      { name: '金星',   a: 108208000,  e: 0.0068, T: 224.701,  r: 6051.8,  color: 0xe6c98a, tex: 'venus.jpg' },
+      { name: '地球',   a: 149597870,  e: 0.0167, T: 365.256,  r: 6371,    color: 0x6ea8ff, earth: true },
+      { name: '火星',   a: 227939200,  e: 0.0934, T: 686.980,  r: 3389.5,  color: 0xd1693f, tex: 'mars.jpg' },
+      { name: '木星',   a: 778570000,  e: 0.0489, T: 4332.589, r: 69911,   color: 0xd8b189, tex: 'jupiter.jpg' },
+      { name: '土星',   a: 1433530000, e: 0.0565, T: 10759.22, r: 58232,   color: 0xe3cfa0, tex: 'saturn.jpg', ring: true },
+      { name: '天王星', a: 2872460000, e: 0.0457, T: 30688.5,  r: 25362,   color: 0xa8dde2, tex: 'uranus.jpg' },
+      { name: '海王星', a: 4495060000, e: 0.0113, T: 60182,    r: 24622,   color: 0x5b83e6, tex: 'neptune.jpg' }
+    ];
+
+    const solarGroup = new THREE.Group();     // 太阳系模式内容（默认隐藏，太阳位于原点）
+    solarGroup.visible = false;
+    scene.add(solarGroup);
+
+    // 太阳系模式下的点光源（位于太阳中心，照亮各行星向阳面）
+    const solarLight = new THREE.PointLight(0xfff2dd, 2.2, 0, 0);
+    solarLight.visible = false;
+    sunGroup.add(solarLight);
+
+    function hexRgba(hex, a) {
+      return `rgba(${(hex >> 16) & 255},${(hex >> 8) & 255},${hex & 255},${a})`;
+    }
+
+    // 通用开普勒求解：平近点角 -> 偏近点角 -> 轨道面内位置（x 指向近地点）
+    function keplerPos(days, a, e, period, out) {
+      const M = 2 * Math.PI * (days / period);
+      let E = M;
+      for (let i = 0; i < 7; i++) E -= (E - e * Math.sin(E) - M) / (1 - e * Math.cos(E));
+      return out.set(a * (Math.cos(E) - e), 0, -a * Math.sqrt(1 - e * e) * Math.sin(E));
+    }
+
+    const planetNodes = [];
+    const planetOrbitLines = [];
+    PLANET_DEFS.forEach(p => {
+      const a = p.a / KM_PER_UNIT;
+      const b = a * Math.sqrt(1 - p.e * p.e);
+      // 真实椭圆轨道线（焦点位于太阳）
+      const pts = [];
+      for (let i = 0; i <= 360; i++) {
+        const E = (i / 360) * Math.PI * 2;
+        pts.push(new THREE.Vector3(a * (Math.cos(E) - p.e), 0, -b * Math.sin(E)));
+      }
+      const line = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(pts),
+        new THREE.LineBasicMaterial({ color: p.earth ? 0x6ea8ff : 0x5f7bb0, transparent: true, opacity: p.earth ? 0.5 : 0.32 })
+      );
+      solarGroup.add(line);
+      planetOrbitLines.push(line);
+
+      const node = { a, e: p.e, T: p.T, earth: !!p.earth };
+      if (!p.earth) {
+        // 行星本体：真实半径 + 真实表面贴图
+        const mat = p.tex
+          ? new THREE.MeshStandardMaterial({ map: loadTex(p.tex), roughness: 0.95, metalness: 0 })
+          : new THREE.MeshStandardMaterial({ color: p.color, roughness: 0.92, metalness: 0 });
+        const mesh = new THREE.Mesh(
+          new THREE.SphereGeometry(p.r / KM_PER_UNIT, 48, 48),
+          mat
+        );
+        solarGroup.add(mesh);
+        node.mesh = mesh;
+        // 土星环（真实比例：环半径约为行星半径的 1.24 ~ 2.27 倍）
+        if (p.ring) {
+          const rr = p.r / KM_PER_UNIT;
+          const ring = new THREE.Mesh(
+            new THREE.RingGeometry(rr * 1.24, rr * 2.27, 64),
+            new THREE.MeshBasicMaterial({ color: 0xcbb58a, side: THREE.DoubleSide, transparent: true, opacity: 0.8 })
+          );
+          ring.rotation.x = -Math.PI / 2;
+          mesh.add(ring);
+        }
+        // 定位光标与名称标签（1:1 比例下行星极小，光标仅用于指示位置）
+        node.marker = makeGlowSprite('rgba(255,255,255,0.9)', hexRgba(p.color, 0.45), 1, true);
+        node.marker.renderOrder = 5;
+        mesh.add(node.marker);
+        node.label = makeLabel(p.name);
+        solarGroup.add(node.label);
+      }
+      planetNodes.push(node);
+    });
+
+    const _earthOrbit = new THREE.Vector3();   // 地球在太阳系模式下的轨道位置
+    function updatePlanets() {
+      for (const n of planetNodes) {
+        if (n.earth) { keplerPos(simDays, n.a, n.e, n.T, _earthOrbit); continue; }
+        keplerPos(simDays, n.a, n.e, n.T, n.mesh.position);
+        n.label.position.set(n.mesh.position.x, n.mesh.position.y + n.a * 0.02, n.mesh.position.z);
+      }
+    }
+
+    /* ================================================================
+       时间系统
+    ================================================================ */
+    // 起始时刻：选在接近满月（月日距角约 175°），且默认观测点（赤道）正处于当地深夜，
+    // 这样一进地表观测就能看到月亮与星空；模拟时间继续按真实周期推进
+    let simDays = 14.40;
+    let playing = true;
+    let speedMul = 1;
+
+    /* ================================================================
+       月相计算（基于真实几何位置）
+    ================================================================ */
+    const _v1 = new THREE.Vector3(), _n = new THREE.Vector3(), _cr = new THREE.Vector3();
+    function getPhase() {
+      moonMesh.getWorldPosition(_v1).sub(earthSystem.position);   // 地心方向（两种模式通用）
+      _v1.normalize();
+      const cosA = _v1.dot(earthSunDir);
+      _n.set(0, 1, 0).applyQuaternion(moonOrbit.quaternion);
+      _cr.crossVectors(_v1, earthSunDir);
+      const waxing = _cr.dot(_n) < 0;
+      const illum = (1 - cosA) / 2;
+      const elong = Math.acos(THREE.MathUtils.clamp(cosA, -1, 1)) * 180 / Math.PI;
+      let name;
+      if (elong < 11.25) name = '新月';
+      else if (elong < 78.75) name = waxing ? '盈娥眉月' : '残月';
+      else if (elong < 101.25) name = waxing ? '上弦月' : '下弦月';
+      else if (elong < 168.75) name = waxing ? '盈凸月' : '亏凸月';
+      else name = '满月';
+      return { name, illum, waxing };
+    }
+
+    // 月相小部件绘制
+    const phaseCtx = document.getElementById('phaseCanvas').getContext('2d');
+    function drawPhaseWidget(illum, waxing) {
+      const ctx = phaseCtx, S = 116, cx = S / 2, cy = S / 2, r = S / 2 - 4;
+      ctx.clearRect(0, 0, S, S);
+
+      ctx.save();
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.clip();
+
+      ctx.fillStyle = '#20283c';
+      ctx.fillRect(0, 0, S, S);
+
+      const k = 1 - 2 * illum;
+      ctx.fillStyle = '#e8ecf4';
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, -Math.PI / 2, Math.PI / 2, !waxing);
+      ctx.ellipse(cx, cy, Math.abs(k) * r, r, 0, Math.PI / 2, -Math.PI / 2, !((k > 0) === waxing));
+      ctx.fill();
+
+      ctx.globalAlpha = 0.16;
+      ctx.fillStyle = '#8a8f9c';
+      ctx.beginPath(); ctx.ellipse(cx * 0.8, cy * 0.75, r * 0.34, r * 0.26, 0.4, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(cx * 1.25, cy * 1.15, r * 0.26, r * 0.2, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.restore();
+
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(140,170,230,0.35)'; ctx.lineWidth = 2; ctx.stroke();
+    }
+
+    /* ================================================================
+       太阳方位指示（相对当前相机朝向，用于判断月相盈亏）
+    ================================================================ */
+    const sunCtx = document.getElementById('sunCanvas').getContext('2d');
+    const elSunRel = document.getElementById('vSunRel');
+    const _sunCam = new THREE.Vector3();
+
+    function drawSunIndicator() {
+      const S = 116, cx = S / 2, cy = S / 2, R = S / 2 - 12;
+      if (systemMode === 'galaxy' || systemMode === 'super' || systemMode === 'cosmic') return;   // 深空体系视角下太阳指示器无意义
+      camera.updateMatrixWorld();
+      _sunCam.copy(sunGroup.position).sub(camera.position).normalize().transformDirection(camera.matrixWorldInverse);
+      const bearing = Math.atan2(_sunCam.x, -_sunCam.z);   // 0 = 正前方，正值为右侧
+      const behind = _sunCam.z > 0;
+
+      sunCtx.clearRect(0, 0, S, S);
+
+      // 视野参考圆环
+      sunCtx.beginPath(); sunCtx.arc(cx, cy, R, 0, Math.PI * 2);
+      sunCtx.strokeStyle = 'rgba(140,170,230,0.3)'; sunCtx.lineWidth = 2; sunCtx.stroke();
+
+      // 顶部三角标记 = 当前视线正前方
+      sunCtx.beginPath();
+      sunCtx.moveTo(cx, cy - R + 4);
+      sunCtx.lineTo(cx - 5, cy - R - 6);
+      sunCtx.lineTo(cx + 5, cy - R - 6);
+      sunCtx.closePath();
+      sunCtx.fillStyle = 'rgba(140,170,230,0.8)'; sunCtx.fill();
+
+      // 太阳光点
+      const ang = Math.PI / 2 - bearing;
+      const px = cx + Math.cos(ang) * R;
+      const py = cy - Math.sin(ang) * R;
+      const g = sunCtx.createRadialGradient(px, py, 0, px, py, 12);
+      g.addColorStop(0, behind ? 'rgba(255,225,150,0.5)' : 'rgba(255,242,200,1)');
+      g.addColorStop(1, 'rgba(255,200,120,0)');
+      sunCtx.fillStyle = g;
+      sunCtx.beginPath(); sunCtx.arc(px, py, 12, 0, Math.PI * 2); sunCtx.fill();
+
+      sunCtx.beginPath(); sunCtx.arc(px, py, 4.5, 0, Math.PI * 2);
+      sunCtx.fillStyle = behind ? 'rgba(255,215,140,0.45)' : '#ffe9b0'; sunCtx.fill();
+
+      elSunRel.textContent = behind ? '在视野后方' : '在视野前方';
+    }
+
+    /* ================================================================
+       HUD 更新
+    ================================================================ */
+    const elTime  = document.getElementById('vTime');
+    const elSpin  = document.getElementById('vSpin');
+    const elOrbit = document.getElementById('vOrbit');
+    const elDist  = document.getElementById('vDist');
+    const elPhase = document.getElementById('vPhase');
+    const elPct   = document.getElementById('vPhasePct');
+
+    function updateHUD() {
+      const d = Math.floor(simDays);
+      const rem = simDays - d;
+      const hh = Math.floor(rem * 24);
+      const mm = Math.floor((rem * 24 - hh) * 60);
+      elTime.textContent = `第 ${d} 天 ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+      elSpin.textContent = `${Math.floor(simDays / SIDEREAL_DAY)} 圈`;
+      elOrbit.textContent = `${Math.floor(simDays / MOON_PERIOD)} 圈`;
+      elDist.innerHTML = `${Math.round(lastMoonDistKm).toLocaleString('en-US')} <em>km</em>`;
+
+      const p = getPhase();
+      elPhase.textContent = p.name;
+      elPct.textContent = `照亮 ${(p.illum * 100).toFixed(0)}%`;
+      drawPhaseWidget(p.illum, p.waxing);
+
+      // 太阳系状态面板（同一模拟时钟驱动）
+      elVSTime.textContent = elTime.textContent;
+      elVSEarth.innerHTML = `${(simDays / 365.256).toFixed(2)} <em>圈</em>`;
+
+      // 地面观测状态面板
+      if (systemMode === 'ground') updateGroundHUD();
+      // 银河系状态面板
+      if (systemMode === 'galaxy') updateGalaxyHUD();
+      // 超星系团状态面板
+      if (systemMode === 'super') updateSuperHUD();
+      // 宇宙网状态面板
+      if (systemMode === 'cosmic') updateCosmicHUD();
+    }
+
+    /* ================================================================
+       视角系统（自由 / 地心观测 / 俯视全景 / 月球特写）
+    ================================================================ */
+    let view = 'free';
+    let trans = null;          // { t, dur, fromPos, fromTarget, fromFov, destFov }
+    let targetFov = BASE_FOV;  // 非过渡期间的平滑目标视场角
+    let zoomMul = 15;          // 地心观测模式默认 15 倍
+
+    const FREE_POS = new THREE.Vector3(-252, -44, 65);   // 默认取景包含太阳与整个地月系统
+    // 月球特写相机偏移：偏向太阳一侧，保证看到的是被照亮的月面
+    const _perpSun = new THREE.Vector3().crossVectors(sunDir, new THREE.Vector3(0, 1, 0)).normalize();
+    const MOON_CAM_OFFSET = sunDir.clone().multiplyScalar(1.4)
+      .add(new THREE.Vector3(0, 0.85, 0))
+      .add(_perpSun.multiplyScalar(3.0));
+    const _moonWorld = new THREE.Vector3();
+
+    function moonWorld() {
+      return moonMesh.getWorldPosition(_moonWorld).clone();   // 世界坐标（局部坐标含 5.1° 倾角偏差）
+    }
+
+    const UP = new THREE.Vector3(0, 1, 0);
+    const _perp = new THREE.Vector3(), _perpUp = new THREE.Vector3();
+    const _dir = new THREE.Vector3(), _camTmp = new THREE.Vector3();
+    const _moonPrev = new THREE.Vector3(), _followDelta = new THREE.Vector3();   // 特写跟随：目标的帧间位移
+
+    // 观看月球：相机位于地月连线的垂直方向并跟随月球，地球与月球同时留在画面内
+    function watchPos() {
+      const m = moonWorld();
+      const axis = m.clone().normalize();
+      // 垂直于地月连线的方向：优先与太阳方向垂直，便于同时观察两者的盈亏
+      _perp.crossVectors(axis, sunDir);
+      if (_perp.lengthSq() < 0.02) _perp.crossVectors(axis, UP).negate();   // 朔月时退化保护
+      _perp.normalize();
+      // 在垂直平面内抬高 WATCH_TILT（相机到连线的垂距仍为 WATCH_D）
+      _perpUp.copy(UP).addScaledVector(axis, -UP.dot(axis)).normalize();
+      _dir.copy(_perp).multiplyScalar(Math.cos(WATCH_TILT))
+        .addScaledVector(_perpUp, Math.sin(WATCH_TILT)).normalize();
+      return m.clone().multiplyScalar(0.5).addScaledVector(_dir, WATCH_D);
+    }
+
+    // 依据地月角距与窗口宽高比自动取景，保证地球与月球同时落在画面内
+    function watchAutoFov() {
+      const m = moonWorld();
+      const p = watchPos();
+      const dE = p.length();
+      const dM = p.distanceTo(m);
+      const cosT = THREE.MathUtils.clamp(p.dot(_camTmp.subVectors(p, m)) / (dE * dM), -1, 1);
+      const theta = Math.acos(cosT);                                    // 地月角距（弧度）
+      const halfH = Math.min(theta * 0.64, Math.PI * 0.47);             // 水平半角，留约 28% 余量
+      const v = 2 * Math.atan(Math.tan(halfH) / Math.max(camera.aspect, 0.6)) * 180 / Math.PI;
+      return THREE.MathUtils.clamp(v, 22, 95);
+    }
+
+    // 地球近景：固定机位，用于观察地球与环绕地球的卫星轨道
+    const EARTH_VIEW_POS = new THREE.Vector3()
+      .crossVectors(sunDir, UP).normalize().multiplyScalar(EARTH_VIEW_D);
+    EARTH_VIEW_POS.y = EARTH_VIEW_D * 0.45;
+
+    function destPos() {
+      if (view === 'geo') return new THREE.Vector3(0, 0.02, 0);
+      if (view === 'top') return new THREE.Vector3(0, 165, 0);
+      if (view === 'moon') return moonWorld().add(MOON_CAM_OFFSET);
+      if (view === 'watch') return watchPos();
+      if (view === 'earth') return EARTH_VIEW_POS;
+      return FREE_POS.clone();
+    }
+    function destTarget() {
+      if (view === 'geo' || view === 'moon') return moonWorld();
+      if (view === 'watch') return moonWorld().multiplyScalar(0.5);
+      return new THREE.Vector3(0, 0, 0);
+    }
+
+    // 各视角的基准视场角与观测倍率上限
+    function baseFov() {
+      return view === 'watch' ? watchAutoFov() : BASE_FOV;
+    }
+    function zoomRange() {
+      if (view === 'geo') return 60;
+      if (view === 'watch') return 6;
+      if (view === 'earth') return 8;
+      return 1;
+    }
+    function easeInOut(t) {
+      return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    }
+
+    function setView(v) {
+      if (v === view) return;
+      view = v;
+      document.querySelectorAll('#viewsEarth .btn-view').forEach(b =>
+        b.classList.toggle('active', b.dataset.view === v));
+
+      controls.enabled = false;
+      // 特写视角：过渡结束后释放鼠标，缩放范围按目标尺度调整
+      controls.minDistance = v === 'moon' ? 0.45 : 1.45;
+      controls.maxDistance = v === 'moon' ? 500 : 30000;
+
+      // 观测倍率滑块按视角复位（地心观测默认 15×，其余视角为 1×）
+      zoomSlider.value = v === 'geo' ? 66 : 0;
+      readZoom();
+
+      trans = {
+        t: 0, dur: 1.2,
+        fromPos: camera.position.clone(),
+        fromTarget: controls.target.clone(),
+        fromFov: camera.fov,
+        destFov: targetFov
+      };
+      targetFov = trans.destFov;
+
+      // 地心观测：相机位于地球内部，隐藏地表与大气
+      const insideEarth = v === 'geo';
+      earthMesh.visible = !insideEarth;
+      cloudMesh.visible = !insideEarth;
+      atmoMesh.visible = !insideEarth;
+      earthLabel.visible = !insideEarth;
+
+      camera.up.set(0, 1, 0);
+      if (v === 'top') camera.up.set(0, 0, -1);
+
+      document.getElementById('zoomCtl').style.display = zoomRange() > 1 ? 'flex' : 'none';
+
+      const hint = document.getElementById('hint');
+      if (v === 'free') hint.innerHTML = '自由视角 · <b>拖拽</b> 旋转 &nbsp;·&nbsp; <b>滚轮</b> 缩放（地球始终固定于原点）';
+      else if (v === 'earth') hint.innerHTML = '地球近景 · 观察地球与环绕它的卫星轨道（轨道高度为真实值；卫星本体尺寸已放大）';
+      else if (v === 'watch') hint.innerHTML = '观看月球 · 地球固定在中心、月球绕地球运行，相机跟随拍摄，可同时看清地球与月球的盈亏变化';
+      else if (v === 'geo') hint.innerHTML = '地心观测视角 · 从地球中心望向月球（此时月球视直径 0.52°，与真实观测一致），可用 <b>观测倍率</b> 进行望远镜式放大';
+      else if (v === 'top') hint.innerHTML = '俯视全景 · 自轨道平面正上方俯瞰——地球始终位于椭圆轨道的一个焦点上';
+      else hint.innerHTML = '月球特写 · 相机伴随月球运动 · <b>拖拽</b> 环绕 &nbsp;·&nbsp; <b>滚轮</b> 缩放，可观察真实月面与地球相位';
+    }
+
+    function updateCamera(dt) {
+      if (trans) {
+        trans.t += dt / trans.dur;
+        const k = easeInOut(Math.min(trans.t, 1));
+        camera.position.lerpVectors(trans.fromPos, destPos(), k);
+        controls.target.lerpVectors(trans.fromTarget, destTarget(), k);
+        camera.fov = trans.fromFov + (trans.destFov - trans.fromFov) * k;
+        camera.updateProjectionMatrix();
+        camera.lookAt(controls.target);
+        if (trans.t >= 1) {
+          trans = null;
+          if (view === 'free' || view === 'moon') {
+            controls.enabled = true;   // 自由/特写视角：过渡完立即释放鼠标
+            if (view === 'moon') _moonPrev.copy(moonWorld());
+          }
+        }
+        return;
+      }
+
+      // 观看月球视角：随月球公转自动取景（始终保证地球与月球同在画面内）
+      if (view === 'watch') targetFov = baseFov() / zoomMul;
+
+      // 视场角平滑收敛（观测倍率在支持的视角生效）
+      if (zoomRange() > 1 && Math.abs(camera.fov - targetFov) > 0.005) {
+        camera.fov += (targetFov - camera.fov) * Math.min(1, dt * 9);
+        camera.updateProjectionMatrix();
+      }
+
+      if (view === 'geo') {
+        camera.position.copy(destPos());
+        const t = destTarget();
+        controls.target.copy(t);
+        camera.lookAt(t);
+      } else if (view === 'moon') {
+        // 月球特写：相机随月球公转平移，鼠标始终可拖拽环绕/滚轮缩放
+        const m = moonWorld();
+        _followDelta.copy(m).sub(_moonPrev);
+        camera.position.add(_followDelta);
+        controls.target.copy(m);
+        _moonPrev.copy(m);
+        controls.update();
+      } else if (view === 'watch') {
+        camera.position.copy(watchPos());
+        controls.target.copy(destTarget());
+        camera.lookAt(controls.target);
+      } else if (view === 'earth') {
+        camera.position.copy(EARTH_VIEW_POS);
+        controls.target.set(0, 0, 0);
+        camera.lookAt(0, 0, 0);
+      } else if (view === 'free') {
+        controls.update();
+      } else if (view === 'top') {
+        camera.position.copy(destPos());
+        camera.lookAt(0, 0, 0);
+      }
+    }
+
+    document.querySelectorAll('#viewsEarth .btn-view').forEach(b =>
+      b.addEventListener('click', () => setView(b.dataset.view)));
+
+    /* ================================================================
+       播放与速度控制
+    ================================================================ */
+    const btnPlay = document.getElementById('btnPlay');
+    function togglePlay() {
+      playing = !playing;
+      btnPlay.textContent = playing ? '❚❚' : '▶';
+    }
+    btnPlay.addEventListener('click', togglePlay);
+    window.addEventListener('keydown', e => {
+      if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); togglePlay(); }
+    });
+
+    // 体系状态提前声明：时间流速分档需要在初始化时读取
+    let systemMode = 'earthmoon';   // 'earthmoon' | 'solar'
+    let modeBlend = 0;              // 0 = 地心参考系，1 = 日心参考系（连续插值）
+    let modeAnim = null;            // 体系切换过渡动画状态
+
+    const slider = document.getElementById('speed');
+    const elSpeed = document.getElementById('vSpeed');
+    function readSpeed() {
+      // 时间流速按体系分档：地月 0.1x ~ 20x；太阳系 50x ~ 5000x（公转以年计，倍率整体抬高一个大档次）
+      // 地表观测 0.01x ~ 2x：地球自转很快，倍率需再低一档才能看清星空缓慢移动
+      // 滑到最左端 = 时间静止，可停下来仔细观察
+      speedMul = slider.value <= 0 ? 0
+        : systemMode === 'solar'
+          ? 50 * Math.pow(100, slider.value / 100)
+          : systemMode === 'ground'
+            ? 0.01 * Math.pow(200, slider.value / 100)
+            : systemMode === 'galaxy'
+              ? (slider.value / 100) * 4.87e9          // 银河系：最高约 200 万年/秒（绕银心一圈约 2 分钟）
+              : systemMode === 'super'
+                ? (slider.value / 100) * 1.22e13       // 超星系团：最高约 50 亿年/秒（巨引源流动可观测）
+                : systemMode === 'cosmic'
+                  ? (slider.value / 100) * 1.22e14     // 宇宙网：最高约 500 亿年/秒（哈勃膨胀可观测）
+                  : 0.1 * Math.pow(200, slider.value / 100);
+      elSpeed.textContent = speedMul === 0 ? '静止'
+        : systemMode === 'galaxy'
+          ? (speedMul * BASE_RATE / 365.25 / 1e6).toFixed(2) + ' 百万年/秒'
+          : systemMode === 'super' || systemMode === 'cosmic'
+            ? (speedMul * BASE_RATE / 365.25 / 1e8).toFixed(2) + ' 亿年/秒'
+            : '×' + (speedMul >= 10 ? speedMul.toFixed(0) : speedMul.toFixed(1));
+    }
+    slider.addEventListener('input', readSpeed);
+    readSpeed();
+
+    const zoomSlider = document.getElementById('zoom');
+    const elZoom = document.getElementById('vZoom');
+    function readZoom() {
+      const range = zoomRange();                            // 各视角的观测倍率上限
+      zoomMul = Math.pow(range, zoomSlider.value / 100);    // 1x ~ range 对数映射
+      elZoom.textContent = '×' + (zoomMul >= 10 ? zoomMul.toFixed(0) : zoomMul.toFixed(1));
+      targetFov = baseFov() / zoomMul;
+    }
+    zoomSlider.addEventListener('input', readZoom);
+    readZoom();
+
+    /* ================================================================
+       卫星显示开关
+    ================================================================ */
+    let showSats = true;
+    const btnSat = document.getElementById('btnSat');
+    const satNote = document.getElementById('satNote');
+    function updateSatToggle() {
+      // 地面观测时人眼看不到轨道上的人造卫星（真实卫星远小于肉眼可见尺寸）
+      const on = showSats && systemMode !== 'ground';
+      satGroup.visible = on;
+      btnSat.textContent = showSats ? '卫星轨道：开' : '卫星轨道：关';
+      btnSat.classList.toggle('on', showSats);
+      satNote.style.display = on ? 'block' : 'none';
+    }
+    btnSat.addEventListener('click', () => { showSats = !showSats; updateSatToggle(); });
+    updateSatToggle();
+
+    // 月球轨道线显示开关
+    let showOrbit = true;
+    const btnOrbit = document.getElementById('btnOrbit');
+    function updateOrbitToggle() {
+      // 月球轨道线不属于"地表仰望"的画面
+      orbitLine.visible = showOrbit && systemMode !== 'ground';
+      btnOrbit.textContent = showOrbit ? '月球轨道：开' : '月球轨道：关';
+      btnOrbit.classList.toggle('on', showOrbit);
+    }
+    btnOrbit.addEventListener('click', () => { showOrbit = !showOrbit; updateOrbitToggle(); });
+    updateOrbitToggle();
+
+    /* ================================================================
+       体系切换：地月模拟 <-> 太阳系模拟（相机与尺度连续过渡，不黑屏）
+       状态变量 systemMode / modeBlend / modeAnim 已在上方提前声明
+    ================================================================ */
+    const btnEM = document.getElementById('btnEM');
+    const btnSolar = document.getElementById('btnSolar');
+    const btnGroundBtn = document.getElementById('btnGround');
+    const btnGalaxy = document.getElementById('btnGalaxy');
+    const btnPlanetOrbit = document.getElementById('btnPlanetOrbit');
+    const hintEl = document.getElementById('hint');
+    const sysTitle = document.getElementById('sysTitle');
+    const sysSub = document.getElementById('sysSub');
+    const statusEarth = document.getElementById('statusEarth');
+    const statusSolar = document.getElementById('statusSolar');
+    const statusGround = document.getElementById('statusGround');
+    const statusGalaxy = document.getElementById('statusGalaxy');
+    const viewsEarth = document.getElementById('viewsEarth');
+    const viewsSolar = document.getElementById('viewsSolar');
+    const viewsGround = document.getElementById('viewsGround');
+    const viewsGalaxy = document.getElementById('viewsGalaxy');
+    const viewsSuper = document.getElementById('viewsSuper');
+    const statusSuper = document.getElementById('statusSuper');
+    const btnSuper = document.getElementById('btnSuper');
+    const btnFlow = document.getElementById('btnFlow');
+    const elSuperView = document.getElementById('vSuperView');
+    const viewsCosmic = document.getElementById('viewsCosmic');
+    const statusCosmic = document.getElementById('statusCosmic');
+    const btnCosmic = document.getElementById('btnCosmic');
+    const btnWeb = document.getElementById('btnWeb');
+    const elCosView = document.getElementById('vCosView');
+    const crosshair = document.getElementById('crosshair');
+    const scaleNote = document.getElementById('scaleNote');
+    const modeVeil = document.getElementById('modeVeil');
+    const veilTitle = document.getElementById('veilTitle');
+    const veilSub = document.getElementById('veilSub');
+    const elVSTime = document.getElementById('vSTime');
+    const elVSEarth = document.getElementById('vSEarth');
+    const elVSView = document.getElementById('vSView');
+    const HINT_FREE = '自由视角 · <b>拖拽</b> 旋转 &nbsp;·&nbsp; <b>滚轮</b> 缩放（地球始终固定于原点）';
+    const HINT_SOLAR = '太阳系模拟 · 太阳位于中心，八大行星按真实距离、真实周期绕太阳运行 · <b>拖拽</b> 旋转 &nbsp;·&nbsp; <b>滚轮</b> 缩放';
+    const HINT_GROUND = '地表观测 · 广角视野，可见地平线 &nbsp;·&nbsp; <b>拖拽</b> 转动视线 &nbsp;·&nbsp; <b>滚轮</b> 改变视场角 &nbsp;·&nbsp; 树与小屋为肉眼尺度参照，可在右侧滑块调整大小';
+    const SCALE_EARTH = scaleNote.innerHTML;
+    const SCALE_SOLAR = '日心参考系：太阳固定于原点，八大行星绕太阳运行（1 单位 = 6,371 km 地球半径）<br>' +
+      '轨道半长轴：水星 5,791 万 km · 地球 1.496 亿 km（1 AU）· 海王星 44.95 亿 km（30 AU）<br>' +
+      '公转周期为真实值：水星 88 天 · 地球 365.26 天 · 海王星 164.8 年<br>' +
+      '行星本体为真实半径，定位光标与标签已放大以便观察';
+
+    const SCALE_GROUND = '地面观测参考系：观测点位于地球表面（1 单位 = 6,371 km 地球半径）<br>' +
+      '高度角 = 天体方向与当地天顶的夹角（90° 为天顶 · 0° 为地平线 · 负值为地平线以下）<br>' +
+      '太阳视直径约 0.53° · 月球视直径约 0.52°（与真实观测一致）<br>' +
+      '天空颜色与星空亮度按太阳高度角变化：晴朗无云，夜空中恒星带大气闪烁<br>' +
+      '视野为广角，地平线由近处地面给出；树 / 小屋仅作肉眼尺度参照，绝对尺寸非 1:1，可用「参照物大小」滑块调整';
+
+    const HINT_GALAXY = '银河系模拟 · 棒旋星系简化模型 &nbsp;·&nbsp; <b>拖拽</b> 旋转 &nbsp;·&nbsp; <b>滚轮</b> 缩放 &nbsp;·&nbsp; 下方按钮可切换 银心黑洞 / 太阳位置 等视角';
+    const SCALE_GALAXY = '银河参考系：1 单位 = 100 光年（本体系独立比例）<br>' +
+      '银盘直径约 10 万光年 · 核球 + 棒 + 四条主旋臂 + 猎户支臂（程序化分布，非真实星表）<br>' +
+      '差速自转：平坦旋转曲线 v≈常数 → 内圈恒星明显快于外圈；旋臂为密度波图案，缓慢进动<br>' +
+      '太阳距银心约 2.66 万光年 · 绕银心周期约 2.25 亿年 · 近共转，长期保持在猎户支臂内<br>' +
+      '银心为黑洞人马座 A*（吸积盘艺术化示意）· 大小麦哲伦云为卫星星系<br>' +
+      '太阳系在此尺度下不可见：脉动光点标记太阳，斜置行星系为压缩时间示意（周期比例真实，行星带渐隐甩尾，转向与银河一致）';
+
+    const HINT_SUPER = '超星系团模拟 · 拉尼亚凯亚 &nbsp;·&nbsp; <b>拖拽</b> 旋转 &nbsp;·&nbsp; <b>滚轮</b> 缩放 &nbsp;·&nbsp; 下方按钮可切换 本星系群 / 巨引源 等视角';
+    const SCALE_SUPER = '超星系团参考系：1 单位 = 100 万光年（本体系独立比例）<br>' +
+      '拉尼亚凯亚超星系团：直径约 5.2 亿光年 · 约 10 万个星系（丝状结构为程序化示意，非真实星表）<br>' +
+      '星系沿丝状结构流向巨引源（约 1.6 亿光年外矩尺座方向）· 本星系群真实流速约 600 km/s<br>' +
+      '本星系群：银河系 + 仙女座星系 M31（约 250 万光年）+ 三角座星系 M33（约 270 万光年）<br>' +
+      '室女座星系团约 5400 万光年 · 长蛇-半人马超星系团位于本星系群与巨引源之间<br>' +
+      '银河系在此尺度下仅为一个脉动光点标记，细节请切换「银河系模拟」';
+
+    const HINT_COSMIC = '宇宙网模拟 · 大尺度结构 &nbsp;·&nbsp; <b>拖拽</b> 旋转 &nbsp;·&nbsp; <b>滚轮</b> 缩放 &nbsp;·&nbsp; 下方按钮可切换 拉尼亚凯亚 等视角';
+    const SCALE_COSMIC = '宇宙网参考系：1 单位 = 1000 万光年（本体系独立比例）<br>' +
+      '可见跨度约 40~50 亿光年 · 节点（超星系团 / 星系团）+ 丝状结构 + 巨大空洞（程序化示意，非真实星表）<br>' +
+      '结构形似大脑神经网络：节点为物质聚集处，丝状结构为连接通道，之间是几乎空无一物的空洞<br>' +
+      '整个网络按哈勃膨胀缓慢撑开（演示用减速速率，膨胀系数 ×2.0 后保持稳定）· 丝内有物质缓慢流动（示意）<br>' +
+      '拉尼亚凯亚超星系团（我们所在）为脉动光点标记 · 史隆长城约 14 亿光年 · 牧夫座空洞为巨大虚空';
+
+    function setSystemMode(m) {
+      if (m === systemMode || modeAnim) return;   // 过渡进行中忽略重复点击
+      const fromGround = systemMode === 'ground';
+      const fromGal = systemMode === 'galaxy';
+      const fromSuper = systemMode === 'super';
+      const fromCosmic = systemMode === 'cosmic';
+      systemMode = m;
+      const solar = m === 'solar';
+      const ground = m === 'ground';
+      const galaxy = m === 'galaxy';
+      const superM = m === 'super';
+      const cosmicM = m === 'cosmic';
+
+      // 终止可能正在进行的视角过渡，回到自由视角状态
+      trans = null;
+      view = 'free';
+      const fromUpNow = camera.up.clone();   // 过渡起点"上方向"（离开地面时为当地天顶）
+      document.querySelectorAll('#viewsEarth .btn-view').forEach(b =>
+        b.classList.toggle('active', b.dataset.view === 'free'));
+      // 若之前处于地心观测（地球被隐藏），恢复显示
+      earthMesh.visible = true;
+      cloudMesh.visible = true;
+      atmoMesh.visible = true;
+      earthLabel.visible = !(ground || galaxy || superM || cosmicM);
+      moonLabel.visible = !(ground || galaxy || superM || cosmicM);
+      sunLabel.visible = !(ground || galaxy || superM || cosmicM);
+
+      // 过场遮罩文案 = 目标体系
+      veilTitle.textContent = solar ? '太阳系模拟' : ground ? '地表观测系统'
+                            : galaxy ? '银河系模拟' : superM ? '超星系团模拟' : cosmicM ? '宇宙网模拟' : '地月系统模拟';
+      veilSub.textContent = solar ? 'SCALE 1:1 · 日心参考系 · 八大行星真实轨道'
+                          : ground ? '站在地球表面 · 仰望真实星空'
+                          : galaxy ? 'SCALE 1 光年 · 棒旋星系 · 程序化简化模型'
+                          : superM ? 'SCALE 100 万光年 · 拉尼亚凯亚 · 巨引源流动'
+                          : cosmicM ? 'SCALE 1000 万光年 · 宇宙网 · 节点与丝状结构'
+                          : 'SCALE 1:1 · 地心参考系 · 真实椭圆轨道';
+
+      controls.enabled = false;
+      modeAnim = {
+        t: 0, dur: (galaxy || fromGal || superM || fromSuper || cosmicM || fromCosmic) ? 3.4 : 2.8,
+        fromK: modeBlend, toK: solar || galaxy || superM || cosmicM ? 1 : 0,
+        camFrom: camera.position.clone(),
+        camTo: solar ? new THREE.Vector3(0, 900000, 1500000) : FREE_POS.clone(),
+        tgtFrom: controls.target.clone(),
+        tgtTo: new THREE.Vector3(0, 0, 0),
+        fovFrom: camera.fov,
+        nearFrom: camera.near,
+        farFrom: camera.far,
+        fromUp: fromUpNow,
+        toGround: ground,
+        fromGround: fromGround,
+        // 银河系/超星系团/宇宙网过渡：'to' = 旧体系内指数拉远后换景落位；'from' = 向标记俯冲后换景归位
+        gal: (galaxy || superM || cosmicM) ? 'to' : (fromGal || fromSuper || fromCosmic) ? 'from' : null,
+        galAnchor: controls.target.clone(),
+        galDir: (() => {
+          const v = camera.position.clone().sub(controls.target);
+          if (v.lengthSq() < 1e-6) v.set(0.3, 0.5, 0.8);
+          return v.normalize();
+        })(),
+        galD0: Math.max(camera.position.distanceTo(controls.target), 1),
+        galD1: 5e7,
+        galFar: cosmicM ? new THREE.Vector3(-2600, 1700, 3800)
+              : superM ? new THREE.Vector3(-5200, 3400, 7000)
+              : new THREE.Vector3(-1400, 1900, 2100),
+        galHome: cosmicM ? COSMIC_FREE_POS : superM ? SUPER_FREE_POS : GAL_FREE_POS,
+        galGetAnchor: fromGal ? () => sunMarker.getWorldPosition(_sunW)
+                    : fromSuper ? () => mwMarker.getWorldPosition(_sunW)
+                    : fromCosmic ? () => lanMarker.getWorldPosition(_sunW) : null,
+        nearTo: solar ? 200 : 0.05,
+        farTo: solar ? 6e6 : 150000,
+        uiSwapped: false
+      };
+
+      // 地面观测：视线由拖拽控制，鼠标不再参与轨道旋转
+      groundDrag = null;
+      groundAim = null;
+
+      solarGroup.visible = solar;
+      solarLight.visible = solar;
+      if (solar) {
+        controls.minDistance = 500;
+        controls.maxDistance = 4000000;
+      } else if (galaxy) {
+        controls.minDistance = 3;
+        controls.maxDistance = 6000;
+      } else if (superM || cosmicM) {
+        controls.minDistance = 2;
+        controls.maxDistance = 2600;
+      } else {
+        controls.minDistance = 1.45;
+        controls.maxDistance = 30000;
+      }
+      updateModeButtons();
+    }
+    function updateModeButtons() {
+      btnEM.classList.toggle('active', systemMode === 'earthmoon');
+      btnSolar.classList.toggle('active', systemMode === 'solar');
+      btnGroundBtn.classList.toggle('active', systemMode === 'ground');
+      btnGalaxy.classList.toggle('active', systemMode === 'galaxy');
+      btnSuper.classList.toggle('active', systemMode === 'super');
+      btnCosmic.classList.toggle('active', systemMode === 'cosmic');
+    }
+    btnEM.addEventListener('click', () => setSystemMode('earthmoon'));
+    btnSolar.addEventListener('click', () => setSystemMode('solar'));
+    btnGroundBtn.addEventListener('click', () => setSystemMode('ground'));
+    btnGalaxy.addEventListener('click', () => setSystemMode('galaxy'));
+    btnSuper.addEventListener('click', () => setSystemMode('super'));
+    btnCosmic.addEventListener('click', () => setSystemMode('cosmic'));
+
+    // UI 整体换套：在过场遮罩最不透明的中点执行，用户感知为"进入新系统"
+    function swapSystemUI(mode) {
+      const solar = mode === 'solar';
+      const ground = mode === 'ground';
+      const galaxy = mode === 'galaxy';
+      const superM = mode === 'super';
+      const cosmicM = mode === 'cosmic';
+      const deepSpace = galaxy || superM || cosmicM;   // 银河系/超星系团/宇宙网共用纯黑深空背景
+      sysTitle.textContent = solar ? '太阳系模拟' : ground ? '地表观测'
+                           : galaxy ? '银河系模拟' : superM ? '超星系团模拟' : cosmicM ? '宇宙网模拟' : '地月系统模拟';
+      sysSub.textContent = solar ? 'WATCHWORLD · MODEL 02 · SCALE 1:1'
+                           : ground ? 'WATCHWORLD · MODEL 03 · 地面视角'
+                           : galaxy ? 'WATCHWORLD · MODEL 04 · SCALE 1 LIGHT-YEAR'
+                           : superM ? 'WATCHWORLD · MODEL 05 · SCALE 1M LIGHT-YEARS'
+                           : cosmicM ? 'WATCHWORLD · MODEL 06 · SCALE 10M LIGHT-YEARS'
+                           : 'WATCHWORLD · MODEL 01 · SCALE 1:1';
+      statusEarth.style.display = (!solar && !ground && !deepSpace) ? 'block' : 'none';
+      statusSolar.style.display = solar ? 'block' : 'none';
+      statusGround.style.display = ground ? 'block' : 'none';
+      statusGalaxy.style.display = galaxy ? 'block' : 'none';
+      statusSuper.style.display = superM ? 'block' : 'none';
+      statusCosmic.style.display = cosmicM ? 'block' : 'none';
+      viewsEarth.style.display = (!solar && !ground && !deepSpace) ? 'flex' : 'none';
+      viewsSolar.style.display = solar ? 'flex' : 'none';
+      viewsGround.style.display = ground ? 'flex' : 'none';
+      viewsGalaxy.style.display = galaxy ? 'flex' : 'none';
+      viewsSuper.style.display = superM ? 'flex' : 'none';
+      viewsCosmic.style.display = cosmicM ? 'flex' : 'none';
+      btnSat.style.display = (!solar && !ground && !deepSpace) ? 'block' : 'none';
+      btnOrbit.style.display = (!solar && !ground && !deepSpace) ? 'block' : 'none';
+      btnPlanetOrbit.style.display = solar ? 'block' : 'none';
+      btnArms.style.display = galaxy ? 'block' : 'none';
+      btnFlow.style.display = superM ? 'block' : 'none';
+      btnWeb.style.display = cosmicM ? 'block' : 'none';
+      document.getElementById('zoomCtl').style.display = 'none';
+      crosshair.style.display = ground ? 'block' : 'none';
+      document.getElementById('refCtl').style.display = ground ? 'flex' : 'none';
+      btnRef.style.display = ground ? '' : 'none';
+      document.getElementById('groundLocs').style.display = ground ? 'flex' : 'none';
+
+      // 银河系/超星系团：太阳系本体在此尺度下小于一个像素，整体隐藏，以标记点代替；
+      // 银河背景贴图是"从地球看的夜空"，深空体系下改用纯黑背景
+      earthSystem.visible = !deepSpace;
+      sunGroup.visible = !deepSpace;
+      galaxyGroup.visible = galaxy;
+      superGroup.visible = superM;
+      cosmicGroup.visible = cosmicM;
+      scene.background = deepSpace ? _galBgColor : milkyWayTex;
+      if (galaxy) {
+        galaxyView = 'free'; galaxyTrans = null;
+        controls.target.set(0, 0, 0);
+        document.querySelectorAll('#viewsGalaxy .btn-view').forEach(b =>
+          b.classList.toggle('active', b.dataset.gv === 'free'));
+        elGalView.textContent = '自由视角';
+      }
+      if (superM) {
+        superView = 'free'; superTrans = null;
+        controls.target.set(0, 0, 0);
+        document.querySelectorAll('#viewsSuper .btn-view').forEach(b =>
+          b.classList.toggle('active', b.dataset.sv === 'free'));
+        elSuperView.textContent = '自由视角';
+      }
+      if (cosmicM) {
+        cosmicView = 'free'; cosmicTrans = null;
+        cosT0 = simDays;   // 膨胀演示从进入时重新开始
+        controls.target.set(0, 0, 0);
+        document.querySelectorAll('#viewsCosmic .btn-view').forEach(b =>
+          b.classList.toggle('active', b.dataset.cv === 'free'));
+        elCosView.textContent = '自由视角';
+      }
+
+      // 地面观测：云层与地球外层大气不属于"地表仰望"的画面，改用天空穹顶 + 恒星场
+      cloudMesh.visible = !ground;
+      atmoMesh.visible = !ground;
+      skyDome.visible = ground;
+      starPoints.visible = ground;
+      // 银河背景亮度：地表夜间会临时提亮，离开地表观测后复位
+      if (!ground) scene.backgroundIntensity = 1;
+      groundPlate.visible = ground;                 // 近处地平面（形成地平线）
+      groundRefGroup.visible = ground && showRef;   // 参照物（树 / 房屋）
+      if (ground) updateGroundRefs();               // 立即摆好，避免换套后位置跳变
+      updateSatToggle();   // 人眼看不到轨道上的人造卫星，地面视角不显示
+      updateOrbitToggle(); // 月球轨道线同样不出现在地面仰望的画面里
+
+      scaleNote.innerHTML = solar ? SCALE_SOLAR : ground ? SCALE_GROUND
+                          : galaxy ? SCALE_GALAXY : superM ? SCALE_SUPER : cosmicM ? SCALE_COSMIC : SCALE_EARTH;
+      hintEl.innerHTML = solar ? HINT_SOLAR : ground ? HINT_GROUND
+                       : galaxy ? HINT_GALAXY : superM ? HINT_SUPER : cosmicM ? HINT_COSMIC : HINT_FREE;
+      readSpeed();   // 切换体系后重算时间流速档位（各体系倍率不同）
+      if (!solar) {
+        solarView = 'free';   // 复位太阳系视角状态
+        solarTrans = null;
+        document.querySelectorAll('#viewsSolar .btn-view').forEach(b =>
+          b.classList.toggle('active', b.dataset.sview === 'free'));
+        elVSView.textContent = '自由视角';
+      }
+    }
+
+    /* ================================================================
+       太阳系视角系统：自由 / 俯视 / 八大行星近景跟随
+    ================================================================ */
+    let solarView = 'free';
+    let solarTrans = null;   // { t, dur, fromPos, fromTarget, fromFov }
+    const SOLAR_TOP_POS = new THREE.Vector3(0, 2400000, 0);
+    const _sd = new THREE.Vector3();
+    const _followPrevS = new THREE.Vector3();   // 太阳系特写跟随：目标上一帧位置
+
+    // 当前特写跟随目标的世界位置（自由/俯视时返回 null）
+    function solarFollowTarget() {
+      if (solarView === 'sun') return sunGroup.position;
+      if (solarView.charAt(0) === 'p') {
+        const n = planetNodes[+solarView.slice(1)];
+        return n.earth ? earthSystem.position : n.mesh.position;
+      }
+      return null;
+    }
+    // 特写目标的真实半径（太阳 / 行星 / 地球）
+    function solarFollowRadius() {
+      if (solarView === 'sun') return SUN_RADIUS;
+      const idx = +solarView.slice(1);
+      return planetNodes[idx].earth ? 1 : PLANET_DEFS[idx].r / KM_PER_UNIT;
+    }
+
+    function solarDestPos() {
+      if (solarView === 'top') return SOLAR_TOP_POS.clone();
+      if (solarView === 'free') return new THREE.Vector3(0, 900000, 1500000);
+      const base = solarFollowTarget();
+      const r = solarFollowRadius();
+      const d = Math.max(r * (solarView === 'sun' ? 3.2 : 12), 2.5);
+      return _sd.copy(base).add(new THREE.Vector3(d * 0.85, d * 0.5, d * 0.85)).clone();
+    }
+    function solarDestTarget() {
+      const t = solarFollowTarget();
+      return t ? t.clone() : new THREE.Vector3(0, 0, 0);
+    }
+
+    function setSolarView(sv) {
+      if ((sv === solarView && !solarTrans) || modeAnim) return;
+      solarView = sv;
+      document.querySelectorAll('#viewsSolar .btn-view').forEach(b =>
+        b.classList.toggle('active', b.dataset.sview === sv));
+      elVSView.textContent = document.querySelector(`#viewsSolar .btn-view[data-sview="${sv}"]`).textContent;
+      controls.enabled = false;
+      // 缩放范围按目标尺度设定：特写可贴近表面，也可拉远
+      if (sv === 'sun' || sv.charAt(0) === 'p') {
+        const r = sv === 'sun' ? SUN_RADIUS
+                               : (planetNodes[+sv.slice(1)].earth ? 1 : PLANET_DEFS[+sv.slice(1)].r / KM_PER_UNIT);
+        controls.minDistance = Math.max(r * 1.5, 0.05);
+        controls.maxDistance = Math.max(r * 6000, 100);
+      } else {
+        controls.minDistance = 500;
+        controls.maxDistance = 4000000;
+      }
+      camera.up.set(0, 1, 0);
+      if (sv === 'top') camera.up.set(0, 0, -1);
+      solarTrans = {
+        t: 0, dur: 1.4,
+        fromPos: camera.position.clone(),
+        fromTarget: controls.target.clone(),
+        fromFov: camera.fov
+      };
+      hintEl.innerHTML = (sv === 'free' || sv === 'top') ? HINT_SOLAR
+        : '特写视角 · 相机跟随目标公转 · <b>拖拽</b> 环绕 &nbsp;·&nbsp; <b>滚轮</b> 缩放';
+    }
+    document.querySelectorAll('#viewsSolar .btn-view').forEach(b =>
+      b.addEventListener('click', () => setSolarView(b.dataset.sview)));
+
+    function updateSolarCamera(dt) {
+      if (solarTrans) {
+        solarTrans.t += dt / solarTrans.dur;
+        const k = easeInOut(Math.min(solarTrans.t, 1));
+        // 目的地每帧实时计算：行星在公转，跟随目标不会落后于行星
+        camera.position.lerpVectors(solarTrans.fromPos, solarDestPos(), k);
+        controls.target.lerpVectors(solarTrans.fromTarget, solarDestTarget(), k);
+        camera.fov = solarTrans.fromFov + (BASE_FOV - solarTrans.fromFov) * k;
+        camera.updateProjectionMatrix();
+        camera.lookAt(controls.target);
+        if (solarTrans.t >= 1) {
+          solarTrans = null;
+          controls.enabled = true;   // 任何视角过渡结束后都释放鼠标
+          const ft = solarFollowTarget();
+          if (ft) _followPrevS.copy(ft);
+        }
+        return;
+      }
+      const ft = solarFollowTarget();
+      if (ft) {
+        // 特写：目标在公转，相机随目标平移；拖拽/滚轮始终可用
+        _followDelta.copy(ft).sub(_followPrevS);
+        camera.position.add(_followDelta);
+        controls.target.copy(ft);
+        _followPrevS.copy(ft);
+        controls.update();
+        // 视锥随距离调整，贴近表面时不裁剪
+        const d = camera.position.distanceTo(ft);
+        const near = Math.max(0.02, d * 0.02);
+        if (Math.abs(camera.near - near) > near * 0.1) {
+          camera.near = near; camera.far = 6000000;
+          camera.updateProjectionMatrix();
+        }
+        return;
+      }
+      controls.update();   // 自由 / 俯视：完全由用户控制
+      if (camera.near !== 200) {
+        camera.near = 200; camera.far = 6000000;
+        camera.updateProjectionMatrix();
+      }
+    }
+
+    // 行星轨道线显示开关（仅太阳系模式显示）
+    let showPlanetOrbits = true;
+    btnPlanetOrbit.addEventListener('click', () => {
+      showPlanetOrbits = !showPlanetOrbits;
+      for (const l of planetOrbitLines) l.visible = showPlanetOrbits;
+      btnPlanetOrbit.textContent = showPlanetOrbits ? '行星轨道：开' : '行星轨道：关';
+      btnPlanetOrbit.classList.toggle('on', showPlanetOrbits);
+    });
+
+    // 每帧更新：太阳/地球位置随 modeBlend 连续插值（两端精确等于真实几何）
+    function updateSystemMode() {
+      updatePlanets();
+      sunGroup.position.copy(sunPosition).multiplyScalar(1 - modeBlend);
+      earthSystem.position.copy(_earthOrbit).multiplyScalar(modeBlend);
+      // 地->日方向：地月模式下精确等于 sunDir，太阳系模式下指向原点太阳
+      earthSunDir.copy(sunGroup.position).sub(earthSystem.position).normalize();
+      sunLight.position.copy(earthSystem.position).addScaledVector(earthSunDir, 100);
+      // 太阳自转：真实赤道自转周期约 25.38 天
+      sunMesh.rotation.y = (simDays / 25.38) * Math.PI * 2;
+      // 辉光随相机距离衰减：远看光芒主导（恒星感），近看光球表面主导（颗粒/黑子/临边昏暗）
+      const dSun = camera.position.distanceTo(sunGroup.position);
+      // 地面观测时太阳的视直径应与真实观测一致（约 0.53°），辉光相应缩小
+      const gnd = systemMode === 'ground';
+      // 太阳本体（真实 0.53° 视直径）由 sunMesh 给出，辉光只保留很小的一圈，
+      // 避免抬头直视天顶时被大片光晕糊白
+      // 地面观测下太阳落至地平线以下时隐藏辉光精灵，避免其透过半透明地平面渗出造成过曝
+      const sunVisible = !gnd || groundSunAlt > -0.02;
+      sunCore.visible = sunVisible;
+      sunHalo.visible = sunVisible;
+      sunCore.scale.setScalar(gnd ? 150 : 900);
+      sunHalo.scale.setScalar(gnd ? 360 : 3400);
+      sunHalo.material.opacity = gnd
+        ? THREE.MathUtils.clamp((dSun - 300) / 14000, 0.05, 0.55)   // 地表观测：压低头顶直视时的眩光
+        : THREE.MathUtils.clamp((dSun - 300) / 14000, 0.08, 1);
+      sunCore.material.opacity = gnd
+        ? THREE.MathUtils.clamp((dSun - 150) / 5000, 0.18, 0.80)
+        : THREE.MathUtils.clamp((dSun - 150) / 5000, 0.18, 1);
+      // 太阳色温分层：贴近地平线时偏橙红（日出日落），升高后逐渐变白
+      const warm = gnd ? THREE.MathUtils.clamp(1 - groundSunAlt / 0.32, 0, 1) : 0;
+      sunCore.material.color.setRGB(1, 1 - 0.42 * warm, 1 - 0.82 * warm);
+      sunHalo.material.color.setRGB(1, 1 - 0.52 * warm, 1 - 0.90 * warm);
+      // 月亮：地表观测下明显提亮，并给暗面一点地照（地球反照），使弦月/暗缘仍可辨认
+      const ph = getPhase();
+      const moonGlow = gnd ? 0.06 + 0.15 * ph.illum : 0.02;
+      moonMesh.material.emissive.setRGB(moonGlow * 0.9, moonGlow * 0.95, moonGlow);
+      moonMesh.material.color.setScalar(gnd ? 1.55 : 1);
+      // 柔光随照亮比例变化：满月周围一圈柔光便于辨认，新月几乎不可见
+      moonGlowSprite.material.opacity = gnd ? (0.10 + 0.72 * ph.illum) : 0;
+      moonGlowSprite.visible = gnd && ph.illum > 0.04;
+    }
+
+    // 模式过渡动画：相机、参考系、视锥同步插值；中点过场遮罩最不透明时整体换 UI
+    function updateModeAnim(dt) {
+      modeAnim.t += dt / modeAnim.dur;
+      const k = easeInOut(Math.min(modeAnim.t, 1));
+      modeBlend = modeAnim.fromK + (modeAnim.toK - modeAnim.fromK) * k;
+
+      if (modeAnim.gal === 'to') {
+        // 进入银河系：前半段在旧体系内指数拉远（太阳系缩成一点），中点换景，后半段落入银河全景
+        if (modeAnim.t < 0.5) {
+          const kk = easeInOut(Math.min(modeAnim.t * 2, 1));
+          const d = modeAnim.galD0 * Math.pow(modeAnim.galD1 / modeAnim.galD0, kk);
+          camera.position.copy(modeAnim.galDir).multiplyScalar(d).add(modeAnim.galAnchor);
+          controls.target.copy(modeAnim.galAnchor);
+          camera.up.copy(modeAnim.fromUp).lerp(UP, Math.min(kk * 1.6, 1)).normalize();
+          camera.near = THREE.MathUtils.lerp(modeAnim.nearFrom, 200, kk);
+          camera.far = THREE.MathUtils.lerp(modeAnim.farFrom, 8e7, kk);
+        } else {
+          const kk = easeInOut((modeAnim.t - 0.5) * 2);
+          camera.position.lerpVectors(modeAnim.galFar, modeAnim.galHome, kk);
+          controls.target.set(0, 0, 0);
+          camera.up.set(0, 1, 0);
+          camera.near = THREE.MathUtils.lerp(200, 0.5, kk);
+          camera.far = THREE.MathUtils.lerp(8e7, 30000, kk);
+        }
+      } else if (modeAnim.gal === 'from') {
+        // 离开银河系：前半段在银河系内向太阳标记指数俯冲，中点换景，后半段指数逼近目标体系
+        if (modeAnim.t < 0.5) {
+          const kk = easeInOut(Math.min(modeAnim.t * 2, 1));
+          const anchor = modeAnim.galGetAnchor();
+          const d = modeAnim.galD0 * Math.pow(0.35 / modeAnim.galD0, kk);
+          camera.position.copy(modeAnim.galDir).multiplyScalar(d).add(anchor);
+          controls.target.copy(anchor);
+          camera.up.set(0, 1, 0);
+          camera.near = THREE.MathUtils.lerp(modeAnim.nearFrom, 0.05, kk);
+          camera.far = THREE.MathUtils.lerp(modeAnim.farFrom, 20000, kk);
+        } else {
+          const kk = easeInOut((modeAnim.t - 0.5) * 2);
+          const L = modeAnim.camTo.length();
+          const d = L * Math.pow(modeAnim.galD1 / L, kk);
+          camera.position.copy(modeAnim.camTo).normalize().multiplyScalar(d);
+          controls.target.set(0, 0, 0);
+          camera.up.set(0, 1, 0);
+          camera.near = THREE.MathUtils.lerp(0.05, modeAnim.nearTo, kk);
+          camera.far = THREE.MathUtils.lerp(20000, modeAnim.farTo, kk);
+        }
+      } else if (modeAnim.toGround) {
+        // 进入地面观测：终点每帧实时计算（地球在自转，观测点随之移动）
+        const gp = groundCamPos(_gP);
+        groundFrame();
+        controls.target.copy(gp).addScaledVector(groundLookDir(_gDir), 300);
+        camera.position.lerpVectors(modeAnim.camFrom, gp, k);
+        camera.up.copy(modeAnim.fromUp).lerp(_gUp, k).normalize();
+        updateGroundRefs();   // 地平面与参照物跟随相机，避免过渡中位置错乱
+      } else if (modeAnim.fromGround) {
+        // 离开地面观测：位置插值回空间视角，同时把"上方向"由当地天顶转回世界 Y 轴
+        camera.position.lerpVectors(modeAnim.camFrom, modeAnim.camTo, k);
+        controls.target.lerpVectors(modeAnim.tgtFrom, modeAnim.tgtTo, k);
+        camera.up.copy(modeAnim.fromUp).lerp(UP, k).normalize();
+      } else {
+        camera.position.lerpVectors(modeAnim.camFrom, modeAnim.camTo, k);
+        controls.target.lerpVectors(modeAnim.tgtFrom, modeAnim.tgtTo, k);
+        camera.up.set(0, 1, 0);
+      }
+
+      camera.fov = modeAnim.fovFrom + (BASE_FOV - modeAnim.fovFrom) * k;
+      // 视锥几何插值：近处地月细节与远处行星轨道都不被裁剪
+      if (modeAnim.toGround) {
+        camera.near = THREE.MathUtils.lerp(modeAnim.nearFrom, 0.0015, k);
+        camera.far = THREE.MathUtils.lerp(modeAnim.farFrom, 200000, k);
+      } else if (modeAnim.fromGround) {
+        camera.near = THREE.MathUtils.lerp(modeAnim.nearFrom, 0.05, k);
+        camera.far = THREE.MathUtils.lerp(modeAnim.farFrom, 150000, k);
+      } else {
+        camera.near = 0.05 * Math.pow(4000, modeBlend);      // 0.05 -> 200
+        camera.far = 150000 * Math.pow(40, modeBlend);       // 150,000 -> 6,000,000
+      }
+      camera.updateProjectionMatrix();
+      camera.lookAt(controls.target);
+      // 过场遮罩：透明度在中点达到峰值，标题卡片明确告知正在进入哪个系统
+      const veil = Math.sin(Math.PI * Math.min(modeAnim.t, 1));
+      modeVeil.style.opacity = (veil * 0.96).toFixed(3);
+      // UI 在遮罩峰值瞬间切换，用户不会看到控件"跳变"
+      if (!modeAnim.uiSwapped && modeAnim.t >= 0.5) {
+        modeAnim.uiSwapped = true;
+        swapSystemUI(systemMode);
+      }
+      if (modeAnim.t >= 1) {
+        if (!modeAnim.uiSwapped) swapSystemUI(systemMode);
+        modeAnim = null;
+        modeVeil.style.opacity = '0';
+        if (systemMode !== 'solar') {
+          solarGroup.visible = false;
+          solarLight.visible = false;
+        }
+        // 地面观测由自定义拖拽控制视线，不启用轨道控制器
+        controls.enabled = systemMode !== 'ground';
+      }
+    }
+
+    /* ================================================================
+       地表观测系统（MODEL 03）：站在地球表面仰望星空
+       —— 观测点随地球自转移动，天空颜色按太阳高度角变化，恒星在夜空中闪烁
+    ================================================================ */
+    const DEG = Math.PI / 180;
+    const GROUND_LOCS = [
+      { name: '赤道',      lat: 0,     lon: 0 },
+      { name: '中国 · 北京',   lat: 39.90, lon: 116.41 },
+      { name: '美国 · 华盛顿', lat: 38.90, lon: -77.04 },
+      { name: '俄罗斯 · 莫斯科', lat: 55.75, lon: 37.62 },
+      { name: '法国 · 巴黎',   lat: 48.86, lon: 2.35 },
+      { name: '北极',      lat: 89.9,  lon: 0 },
+      { name: '南极',      lat: -89.9, lon: 0 }
+    ];
+    let groundLoc = 0;              // 当前观测点索引
+    let groundYaw = 0;              // 视线方位（0 = 正北，向东为正）
+    let groundPitch = 18 * DEG;     // 视线高度角
+    let groundAim = null;           // 平滑转向目标 { yaw, pitch }
+    let groundFov = 88;             // 地面视场角（广角；滚轮调节）
+    let groundSunAlt = 0;           // 太阳相对观测点的高度角（弧度）
+
+    const _gUp = new THREE.Vector3(), _gEast = new THREE.Vector3(), _gNorth = new THREE.Vector3();
+    const _gQ = new THREE.Quaternion(), _gDir = new THREE.Vector3(), _gP = new THREE.Vector3();
+    const _gTmp = new THREE.Vector3(), _gSunV = new THREE.Vector3();
+    const _gAxisZ = new THREE.Vector3(0, 0, 1);
+
+    // 观测点的本地 ENU 基（东-北-天顶），随地球自转与地轴倾角一起转动
+    function groundFrame() {
+      const L = GROUND_LOCS[groundLoc];
+      const la = L.lat * DEG, lo = L.lon * DEG;
+      const cl = Math.cos(la), sl = Math.sin(la);
+      _gUp.set(cl * Math.cos(lo), sl, cl * Math.sin(lo));
+      _gEast.set(-Math.sin(lo), 0, Math.cos(lo));
+      _gNorth.set(-sl * Math.cos(lo), cl, -sl * Math.sin(lo));
+      // 先随地球自转（earthMesh.rotation.y），再随地轴倾角（earthTilt.rotation.z）
+      _gQ.setFromAxisAngle(UP, earthMesh.rotation.y);
+      _gUp.applyQuaternion(_gQ); _gEast.applyQuaternion(_gQ); _gNorth.applyQuaternion(_gQ);
+      _gQ.setFromAxisAngle(_gAxisZ, -AXIAL_TILT);
+      _gUp.applyQuaternion(_gQ); _gEast.applyQuaternion(_gQ); _gNorth.applyQuaternion(_gQ);
+      _gUp.normalize();
+    }
+
+    // 观测点位置（地表，海拔忽略）
+    function groundCamPos(out) {
+      groundFrame();
+      return out.copy(_gUp).multiplyScalar(EARTH_RADIUS * 1.0006).add(earthSystem.position);
+    }
+
+    // 当前视线方向（由方位角与高度角在 ENU 基上合成）
+    function groundLookDir(out) {
+      const cp = Math.cos(groundPitch);
+      return out.copy(_gNorth).multiplyScalar(cp * Math.cos(groundYaw))
+        .addScaledVector(_gEast, cp * Math.sin(groundYaw))
+        .addScaledVector(_gUp, Math.sin(groundPitch)).normalize();
+    }
+
+    /* ---- 天空穹顶：按太阳高度角混合白昼蓝天与黑夜（晴朗无云） ---- */
+    const SKY_R = 60000;
+    const skyUniforms = {
+      uZenith: { value: new THREE.Vector3(0, 1, 0) },
+      uSunDir: { value: new THREE.Vector3(0, 1, 0) },
+      uSunAlt: { value: 1 },
+      uDay:    { value: 0 }
+    };
+    const skyDome = new THREE.Mesh(
+      new THREE.SphereGeometry(SKY_R, 48, 32),
+      new THREE.ShaderMaterial({
+        uniforms: skyUniforms,
+        side: THREE.BackSide,
+        transparent: true,
+        depthWrite: false,
+        vertexShader: `
+          varying vec3 vDir;
+          void main() {
+            vDir = normalize(mat3(modelMatrix) * position);
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }`,
+        fragmentShader: `
+          uniform vec3 uZenith;
+          uniform vec3 uSunDir;
+          uniform float uSunAlt;
+          uniform float uDay;
+          varying vec3 vDir;
+          void main() {
+            vec3 d = normalize(vDir);
+            float up = clamp(dot(d, uZenith), 0.0, 1.0);
+            float toSun = max(dot(d, uSunDir), 0.0);
+            // 地平线偏亮偏白、天顶偏深蓝（瑞利散射的简化表现）
+            vec3 col = mix(vec3(0.66, 0.75, 0.90), vec3(0.10, 0.26, 0.62), pow(up, 0.72));
+            // 低空暖、高空白：太阳光的色温分层
+            float warm = clamp(1.0 - abs(uSunAlt) / 0.32, 0.0, 1.0);
+            vec3 sunTint = mix(vec3(1.0, 0.95, 0.88), vec3(1.0, 0.62, 0.28), warm);
+            col += sunTint * pow(toSun, 6.0) * 0.30 * uDay;
+            // 暮光 / 日落：太阳接近地平线时，整条地平线泛橙红，越贴近地平线越浓
+            float band = clamp(1.0 - abs(uSunAlt) / 0.34, 0.0, 1.0);
+            float horizonW = pow(1.0 - up, 6.0);
+            col += vec3(1.0, 0.45, 0.16) * band * (horizonW * 1.05 + pow(toSun, 2.5) * 0.5);
+            // 日落方向上更强的一抹余晖
+            col += vec3(1.0, 0.30, 0.10) * band * horizonW * pow(toSun, 1.5) * 0.85;
+            gl_FragColor = vec4(min(col, vec3(1.0)), uDay);
+          }`
+      })
+    );
+    skyDome.renderOrder = -3;
+    skyDome.visible = false;
+    scene.add(skyDome);
+
+    /* ---- 恒星场：球面均匀分布的亮星，夜间在地面视角可见并闪烁 ---- */
+    const STAR_N = 900;
+    const starUniforms = { uTime: { value: 0 }, uOpacity: { value: 0 }, uTwinkle: { value: 1 }, uSize: { value: 1 } };
+    const starPoints = (() => {
+      const geo = new THREE.BufferGeometry();
+      const pos = new Float32Array(STAR_N * 3);
+      const col = new Float32Array(STAR_N * 3);
+      const siz = new Float32Array(STAR_N);
+      const pha = new Float32Array(STAR_N);
+      const mag = new Float32Array(STAR_N);
+      const c = new THREE.Color();
+      const R = SKY_R * 0.92;
+      for (let i = 0; i < STAR_N; i++) {
+        const u = Math.random() * 2 - 1, th = Math.random() * Math.PI * 2;
+        const r = Math.sqrt(1 - u * u);
+        pos[i * 3] = Math.cos(th) * r * R;
+        pos[i * 3 + 1] = u * R;
+        pos[i * 3 + 2] = Math.sin(th) * r * R;
+        const m = Math.pow(Math.random(), 2.2);        // 亮星稀少、暗星居多
+        mag[i] = 0.22 + m * 1.05;
+        siz[i] = 1.4 + m * 2.8;
+        const tint = Math.random();
+        c.setHSL(tint < 0.16 ? 0.07 : tint < 0.34 ? 0.58 : 0.6, 0.2 + Math.random() * 0.4, 0.74);
+        col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+        pha[i] = Math.random();
+      }
+      geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      geo.setAttribute('aColor',   new THREE.BufferAttribute(col, 3));
+      geo.setAttribute('aSize',    new THREE.BufferAttribute(siz, 1));
+      geo.setAttribute('aPhase',   new THREE.BufferAttribute(pha, 1));
+      geo.setAttribute('aMag',     new THREE.BufferAttribute(mag, 1));
+      const pts = new THREE.Points(geo, new THREE.ShaderMaterial({
+        uniforms: starUniforms,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        vertexShader: `
+          attribute vec3 aColor;
+          attribute float aSize;
+          attribute float aPhase;
+          attribute float aMag;
+          uniform float uTime;
+          uniform float uTwinkle;
+          uniform float uSize;
+          varying float vB;
+          varying vec3 vC;
+          void main() {
+            // 大气湍流造成的闪烁：仅地面观测开启（太空视角下恒星不应闪烁）
+            float tw = uTwinkle * 0.16 * sin(uTime * (1.6 + aPhase * 2.4) + aPhase * 6.283);
+            vB = clamp(aMag * (1.0 + tw), 0.0, 1.7);
+            vC = aColor;
+            gl_PointSize = aSize * uSize * (1.0 + tw * 0.7);
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }`,
+        fragmentShader: `
+          uniform float uOpacity;
+          varying float vB;
+          varying vec3 vC;
+          void main() {
+            float d = length(gl_PointCoord - 0.5);
+            float a = smoothstep(0.5, 0.04, d);
+            gl_FragColor = vec4(vC * vB, a * uOpacity);
+          }`
+      }));
+      pts.frustumCulled = false;
+      pts.visible = false;
+      scene.add(pts);
+      return pts;
+    })();
+
+    // 每帧：天空颜色、恒星亮度与闪烁（由太阳高度角驱动）
+    function updateGroundSky(dt) {
+      groundFrame();
+      camera.getWorldPosition(_gTmp);
+      _gSunV.copy(sunGroup.position).sub(_gTmp).normalize();
+      const sinAlt = THREE.MathUtils.clamp(_gSunV.dot(_gUp), -1, 1);
+      groundSunAlt = Math.asin(sinAlt);
+      const day = THREE.MathUtils.smoothstep(groundSunAlt, -0.16, 0.10);   // 昼夜过渡带约 ±9°
+      skyUniforms.uZenith.value.copy(_gUp);
+      skyUniforms.uSunDir.value.copy(_gSunV);
+      skyUniforms.uSunAlt.value = groundSunAlt;
+      skyUniforms.uDay.value = day;
+      starUniforms.uTime.value += dt;
+      // 地表观测：万里无云、无光污染，夜间星空与银河比太空视角明显更亮
+      const night = 1 - day;
+      starUniforms.uOpacity.value = THREE.MathUtils.clamp(night * 1.35, 0, 1);  // 白昼天光淹没暗星
+      starUniforms.uSize.value = 1 + 0.7 * night;          // 夜间星点略放大，银河更清晰
+      starUniforms.uTwinkle.value = 1;                     // 仅地面视角可见，故恒开启闪烁
+      // 银河背景：夜间整体提亮，白天即使被天穹遮住也保留一点底色层次
+      scene.backgroundIntensity = 0.85 + 0.9 * night;
+      updateGroundRefs();                               // 摆放地平面与参照物
+    }
+
+    // 地面相机：位置固定在地表观测点（随自转移动），视线由方位角/高度角决定
+    function updateGroundCamera(dt) {
+      if (groundAim) {
+        const k = Math.min(1, dt * 3.4);
+        let dy = groundAim.yaw - groundYaw;
+        while (dy > Math.PI) dy -= Math.PI * 2;
+        while (dy < -Math.PI) dy += Math.PI * 2;
+        groundYaw += dy * k;
+        groundPitch += (groundAim.pitch - groundPitch) * k;
+        if (Math.abs(dy) < 0.003 && Math.abs(groundAim.pitch - groundPitch) < 0.003) {
+          groundYaw = groundAim.yaw;
+          groundPitch = groundAim.pitch;
+          groundAim = null;
+        }
+      }
+      groundPitch = THREE.MathUtils.clamp(groundPitch, -8 * DEG, 86 * DEG);
+      groundFrame();
+      camera.up.copy(_gUp);
+      camera.position.copy(_gUp).multiplyScalar(EARTH_RADIUS * 1.0006).add(earthSystem.position);
+      controls.target.copy(camera.position).addScaledVector(groundLookDir(_gDir), 300);
+      camera.lookAt(controls.target);
+      if (Math.abs(camera.fov - groundFov) > 0.01) {
+        camera.fov += (groundFov - camera.fov) * Math.min(1, dt * 8);
+        camera.updateProjectionMatrix();
+      }
+      // 近裁剪面贴近脚边（避免低头时地面被裁出空洞），远裁剪面覆盖天空穹顶
+      if (camera.near !== 0.0015) { camera.near = 0.0015; camera.far = 200000; camera.updateProjectionMatrix(); }
+    }
+
+    /* ---- 地面观测交互：拖拽转动视线 · 滚轮改变视场角 ---- */
+    let groundDrag = null;
+    renderer.domElement.addEventListener('pointerdown', e => {
+      if (systemMode !== 'ground' || modeAnim) return;
+      groundDrag = { x: e.clientX, y: e.clientY };
+      groundAim = null;                        // 手动拖拽优先于自动转向
+      renderer.domElement.style.cursor = 'grabbing';
+    });
+    window.addEventListener('pointermove', e => {
+      if (!groundDrag) return;
+      const dx = e.clientX - groundDrag.x, dy = e.clientY - groundDrag.y;
+      groundDrag.x = e.clientX; groundDrag.y = e.clientY;
+      groundYaw -= dx * 0.0022;                // 拖动方向与天空移动方向一致
+      groundPitch = THREE.MathUtils.clamp(groundPitch + dy * 0.0022, -8 * DEG, 86 * DEG);
+    });
+    window.addEventListener('pointerup', () => {
+      if (!groundDrag) return;
+      groundDrag = null;
+      renderer.domElement.style.cursor = '';
+    });
+    renderer.domElement.addEventListener('wheel', e => {
+      if (systemMode !== 'ground' || modeAnim) return;
+      e.preventDefault();
+      groundFov = THREE.MathUtils.clamp(groundFov + e.deltaY * 0.03, 55, 115);
+    }, { passive: false });
+
+    // 把某个世界方向转成本地视线（用于"看太阳/看月亮"）
+    function groundAimAt(dirWorld) {
+      groundFrame();
+      groundAim = {
+        yaw: Math.atan2(dirWorld.dot(_gEast), dirWorld.dot(_gNorth)),
+        pitch: Math.asin(THREE.MathUtils.clamp(dirWorld.dot(_gUp), -1, 1))
+      };
+    }
+
+    const gposBtns = document.querySelectorAll('#groundLocs .btn-view[data-gpos]');
+    const gdirBtns = document.querySelectorAll('#viewsGround .btn-view[data-gdir]');
+
+    function setGroundLoc(i) {
+      groundLoc = i;
+      gposBtns.forEach(b => b.classList.toggle('active', +b.dataset.gpos === i));
+      // 旗面跟随观测点切换：首都 → 该国国旗；赤道/两极 → 中性标识
+      flagMat.map = FLAG_TEXTURES[i];
+    }
+
+    gposBtns.forEach(b => b.addEventListener('click', () => setGroundLoc(+b.dataset.gpos)));
+
+    gdirBtns.forEach(b => b.addEventListener('click', () => {
+      const dirs = { N: [0, 20], E: [90, 20], S: [180, 20], W: [-90, 20], Z: [0, 78] };
+      const v = dirs[b.dataset.gdir];
+      groundAim = { yaw: v[0] * DEG, pitch: v[1] * DEG };
+      gdirBtns.forEach(x => x.classList.toggle('active', x === b));
+    }));
+
+    document.querySelectorAll('#viewsGround .btn-view[data-glook]').forEach(b =>
+      b.addEventListener('click', () => {
+        _gTmp.copy(b.dataset.glook === 'sun' ? sunGroup.position : moonWorld())
+          .sub(groundCamPos(_gP));
+        if (_gTmp.lengthSq() < 1e-8) return;
+        groundAimAt(_gTmp.normalize());
+      }));
+
+    /* ---- 地面参照物与地平面 ----
+       人站在地面上仰望时，近处地面与参照物（树/小屋）给出尺度感与地平线参照。
+       注意：真实 10 m 尺度在 6,371 km 半径的坐标系里无法参与渲染（远小于近裁剪面），
+       因此参照物放在"刚超出近裁剪面"的距离上，用倍率把角尺寸调成肉眼看上去正确的样子，
+       可用「参照物大小」滑块自行微调。 */
+    const REF_DIST = 0.0086;         // 参照物水平距离（单位）≈ 55 km，> 近裁剪面
+    let refMul = 1;                  // 参照物倍率（滑块调节）
+    let showRef = true;              // 参照物显示开关
+
+    const _vFoot = new THREE.Vector3();
+    const _gBasis = new THREE.Matrix4();
+    const _gQuat = new THREE.Quaternion();
+
+    /* 地平面：以观测点为球心的下半球穹顶（半径很大，任何方向都远于近裁剪面，不会被裁掉），
+       从内部看恰好在 0° 高度角处形成一条笔直的地平线；不参与深度测试，永远覆盖地平线以下，
+       从而遮住被近裁剪掉的地球球面。renderOrder 高于太阳精灵，使地平线以下的太阳被地面挡住。 */
+    const groundUniforms = { uDay: { value: 0 }, uTwilight: { value: 0 } };
+    const GROUND_R = SKY_R * 0.9;
+    const groundPlate = new THREE.Mesh(
+      new THREE.SphereGeometry(GROUND_R, 64, 24, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2),
+      new THREE.ShaderMaterial({
+        uniforms: groundUniforms,
+        side: THREE.BackSide,
+        transparent: true,
+        depthWrite: false,
+        depthTest: false,
+        vertexShader: `
+          varying vec3 vDir;
+          void main() {
+            vDir = normalize(position);                 // 球心即相机，方向即视线方向
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }`,
+        fragmentShader: `
+          uniform float uDay;
+          uniform float uTwilight;
+          varying vec3 vDir;
+          float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+          float noise(vec2 p) {
+            vec2 i = floor(p), f = fract(p);
+            vec2 u = f * f * (3.0 - 2.0 * f);
+            return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x),
+                       mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
+          }
+          void main() {
+            vec3 d = normalize(vDir);
+            float el = asin(clamp(d.y, -1.0, 1.0));     // 相对地平线的高度角
+            // 地面平面坐标：x = 东向、y = 北向，单位为"眼高"（脚下 1 眼高处约为 1.0）
+            vec2 gp = d.xz / max(0.055, -d.y);
+            float t = smoothstep(0.0, -0.62, el);       // 0 = 地平线处，1 = 低头看脚下
+            // 草地：噪声斑驳的深浅绿
+            float n = noise(gp * 1.7) * 0.6 + noise(gp * 7.0) * 0.4;
+            vec3 grass = mix(vec3(0.10, 0.13, 0.075), vec3(0.185, 0.215, 0.115), n);
+            // 土路：沿北向延伸、缓慢弯曲的一条小路
+            float px = 1.35 * sin(gp.y * 0.045) + 0.35 * sin(gp.y * 0.19);
+            float pd = abs(gp.x - px);
+            float path = 1.0 - smoothstep(0.55, 0.95, pd);
+            vec3 dirt = mix(vec3(0.26, 0.225, 0.165), vec3(0.35, 0.30, 0.225), n);
+            // 路肩：略深的草色过渡
+            float edge = (1.0 - smoothstep(0.95, 1.9, pd)) * (1.0 - path);
+            vec3 col = mix(grass, dirt, path * 0.92);
+            col = mix(col, grass * 0.72, edge * 0.5);
+            // 零星小石子/斑驳（细噪声点缀）
+            float spk = step(0.93, noise(gp * 26.0));
+            col = mix(col, vec3(0.34, 0.335, 0.30), spk * 0.35 * (1.0 - path));
+            // 夜间整体压暗（保留微弱环境色）
+            col = mix(col * 0.14 + vec3(0.005, 0.006, 0.010), col, uDay);
+            // 越接近地平线越雾化，形成地平线色带
+            float haze = smoothstep(0.62, 0.0, t) * 0.9;
+            vec3 hazeCol = mix(vec3(0.055, 0.070, 0.10), vec3(0.56, 0.64, 0.75), uDay);
+            col = mix(col, hazeCol, haze);
+            // 暮光：地平线附近被夕阳染暖
+            col += vec3(1.0, 0.44, 0.15) * uTwilight * haze * 0.45;
+            float a = smoothstep(0.007, -0.004, el);    // 地平线附近轻轻淡出，避免硬锯齿
+            gl_FragColor = vec4(min(col, vec3(1.0)), a);
+          }`
+      })
+    );
+    groundPlate.renderOrder = 20;
+    groundPlate.frustumCulled = false;
+    groundPlate.visible = false;
+    scene.add(groundPlate);
+
+    /* 参照物：一棵树 + 一间小屋，安放在观测点脚边的切平面上（随观测点与地轴一起转动） */
+    const groundRefGroup = new THREE.Group();
+    groundRefGroup.visible = false;
+    scene.add(groundRefGroup);
+    const refObjects = [];
+
+    function makeTree() {
+      const g = new THREE.Group();
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.048, 0.075, 0.42, 8),
+        new THREE.MeshBasicMaterial({ color: 0x554034 }));
+      trunk.position.y = 0.21;
+      g.add(trunk);
+      const leafMat = new THREE.MeshBasicMaterial({ color: 0x2e7a44 });
+      [[0.30, 0.44], [0.23, 0.66], [0.15, 0.86]].forEach(([r, y]) => {
+        const cone = new THREE.Mesh(new THREE.ConeGeometry(r, 0.40, 9), leafMat);
+        cone.position.y = y;
+        g.add(cone);
+      });
+      return g;
+    }
+
+    function makeHut() {
+      const g = new THREE.Group();
+      const wall = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.62, 1.1),
+        new THREE.MeshBasicMaterial({ color: 0x8d8577 }));
+      wall.position.y = 0.31;
+      g.add(wall);
+      // 茅草屋顶：厚一些的锥顶，稻黄色
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(1.06, 0.62, 4),
+        new THREE.MeshBasicMaterial({ color: 0xb08c4f }));
+      roof.position.y = 0.93;
+      roof.rotation.y = Math.PI / 4;
+      g.add(roof);
+      return g;
+    }
+
+    /* 矮杂物：草叶 / 碎石 / 石板 / 矮灌木
+       —— 都用同一套"角尺寸一致"的缩放：worldScale = 距离 × k，k ≈ 目标角大小的正切，
+       所以远处和近处的同类物件在画面里看着一样高，全部做得很矮，不会遮挡视线 */
+    function flatMat(color) {
+      const m = new THREE.MeshBasicMaterial({ color });
+      m.transparent = true;
+      m.depthTest = false;      // 始终盖在地平面之上
+      return m;
+    }
+    const grassMat = flatMat(0x3c6b30);
+    const rockMat = flatMat(0x6a6a63);
+    const slabMat = flatMat(0x8b8b84);
+    const bushMat = flatMat(0x2c5d33);
+
+    function makeGrassTuft() {
+      const g = new THREE.Group();
+      for (let i = 0; i < 3; i++) {
+        const b = new THREE.Mesh(new THREE.ConeGeometry(0.16, 1, 5), grassMat);
+        b.position.set((i - 1) * 0.22, 0.5, (i % 2) * 0.14);
+        b.rotation.z = (i - 1) * 0.16;
+        g.add(b);
+      }
+      return g;
+    }
+    function makeRock() {
+      const m = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 0), rockMat);
+      m.scale.set(1, 0.55, 0.85);
+      return m;
+    }
+    function makeSlab() {
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 0.13, 6), slabMat);
+      m.position.y = 0.06;
+      return m;
+    }
+    function makeBush() {
+      const g = new THREE.Group();
+      const c = new THREE.Mesh(new THREE.ConeGeometry(1, 0.7, 7), bushMat);
+      c.position.y = 0.35;
+      g.add(c);
+      return g;
+    }
+
+    // 固定种子的伪随机，保证每次刷新布局一致
+    let _seed = 20261019;
+    function rnd() { _seed = (_seed * 1103515245 + 12345) & 0x7fffffff; return _seed / 0x7fffffff; }
+
+    function scatter(maker, count, aCenter, aSpread, rMin, rMax, k, spread) {
+      for (let i = 0; i < count; i++) {
+        const mesh = maker();
+        const ang = (aCenter + (rnd() * 2 - 1) * aSpread) * DEG;
+        const d = rMin + rnd() * (rMax - rMin);
+        mesh.position.set(Math.sin(ang) * d, 0, Math.cos(ang) * d);
+        mesh.rotation.y = rnd() * Math.PI * 2;
+        mesh.scale.multiplyScalar(d * k);
+        if (spread !== undefined) mesh.scale.y *= spread;   // 只压扁高度，做成"矮"
+        mesh.traverse(o => { o.frustumCulled = false; o.renderOrder = 21; });
+        groundRefGroup.add(mesh);
+      }
+    }
+
+    // 参照物清单：bearing 为相对正北的方位角，distK 为距离倍率，unit 为"看起来正确"的角尺寸倍率
+    [
+      { make: makeTree, bearing: -24, distK: 1.0, unit: 0.0027 },   // 约 10 m 高的树，如站在 30 m 外所见
+      { make: makeHut,  bearing: 31,  distK: 2.0, unit: 0.0013 }    // 约 4 m 高的茅草屋，如站在 60 m 外所见
+    ].forEach(it => {
+      const mesh = it.make();
+      const ang = it.bearing * DEG;
+      const d = REF_DIST * it.distK;
+      mesh.position.set(Math.sin(ang) * d, 0, Math.cos(ang) * d);
+      mesh.traverse(o => {
+        o.frustumCulled = false;
+        if (o.material) {
+          o.material.transparent = true;   // 进入透明队列，
+          o.material.depthTest = false;    // 始终盖在地平面之上
+        }
+        o.renderOrder = 21;
+      });
+      groundRefGroup.add(mesh);
+      refObjects.push({ mesh, unit: it.unit });
+    });
+
+    // 树旁的一小簇：杂草 / 碎石 / 石板 / 矮灌木（全都矮，紧贴地面）
+    scatter(makeGrassTuft, 26, -24, 55, 0.0045, 0.020, 0.045);
+    scatter(makeRock,       9, -24, 70, 0.0050, 0.018, 0.028, 0.9);
+    scatter(makeSlab,       7,  10, 45, 0.0060, 0.014, 0.038, 0.9);
+    scatter(makeBush,       4,  34, 22, 0.0080, 0.017, 0.070, 0.85);
+
+    /* 旗杆 + 国旗：竖在小屋旁，切换观测国家时旗面随之更换。
+       各国国旗为程序化简绘（模拟展示用）；赤道与两极无官方国旗，使用中性标识。 */
+    function makeFlagTexture(draw) {
+      const c = document.createElement('canvas');
+      c.width = 300; c.height = 200;
+      draw(c.getContext('2d'));
+      const t = new THREE.CanvasTexture(c);
+      t.colorSpace = THREE.SRGBColorSpace;
+      return t;
+    }
+    function starPath(ctx, cx, cy, r) {
+      ctx.beginPath();
+      for (let i = 0; i < 5; i++) {
+        const a = -Math.PI / 2 + i * 4 * Math.PI / 5;
+        const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
+        i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+      }
+      ctx.closePath(); ctx.fill();
+    }
+    const FLAG_TEXTURES = [
+      c => {   // 赤道：靛青底 + 0° 纬线标识
+        c.fillStyle = '#173a5e'; c.fillRect(0, 0, 300, 200);
+        c.strokeStyle = 'rgba(255,255,255,0.85)'; c.lineWidth = 6;
+        c.beginPath(); c.moveTo(24, 128); c.lineTo(276, 128); c.stroke();
+        c.fillStyle = '#fff'; c.font = 'bold 64px sans-serif';
+        c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('0°', 150, 66);
+      },
+      c => {   // 中国：五星红旗
+        c.fillStyle = '#de2910'; c.fillRect(0, 0, 300, 200);
+        c.fillStyle = '#ffde00';
+        starPath(c, 60, 60, 32);
+        starPath(c, 118, 24, 11); starPath(c, 140, 46, 11);
+        starPath(c, 140, 78, 11); starPath(c, 118, 100, 11);
+      },
+      c => {   // 美国：星条旗（简绘）
+        c.fillStyle = '#ffffff'; c.fillRect(0, 0, 300, 200);
+        c.fillStyle = '#b22234';
+        for (let i = 0; i < 13; i += 2) c.fillRect(0, i * 200 / 13, 300, 200 / 13);
+        c.fillStyle = '#3c3b6e'; c.fillRect(0, 0, 120, 108);
+        c.fillStyle = '#ffffff';
+        for (let r = 0; r < 5; r++) for (let k = 0; k < 6; k++)
+          starPath(c, 15 + k * 18 + (r % 2) * 9, 14 + r * 20, 4.5);
+      },
+      c => {   // 俄罗斯：白蓝红三色
+        c.fillStyle = '#ffffff'; c.fillRect(0, 0, 300, 200);
+        c.fillStyle = '#0039a6'; c.fillRect(0, 200 / 3, 300, 200 / 3);
+        c.fillStyle = '#d52b1e'; c.fillRect(0, 400 / 3, 300, 200 / 3);
+      },
+      c => {   // 法国：蓝白红三色
+        c.fillStyle = '#0055a4'; c.fillRect(0, 0, 100, 200);
+        c.fillStyle = '#ffffff'; c.fillRect(100, 0, 100, 200);
+        c.fillStyle = '#ef4135'; c.fillRect(200, 0, 100, 200);
+      },
+      c => {   // 北极：北极星 + N
+        c.fillStyle = '#0e2a4d'; c.fillRect(0, 0, 300, 200);
+        c.fillStyle = '#ffffff';
+        starPath(c, 150, 72, 34);
+        c.font = 'bold 52px sans-serif';
+        c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('N', 150, 150);
+      },
+      c => {   // 南极：极地冰原意象 + S
+        c.fillStyle = '#2e6db4'; c.fillRect(0, 0, 300, 200);
+        c.fillStyle = '#ffffff';
+        c.beginPath();
+        c.moveTo(66, 74); c.quadraticCurveTo(118, 30, 172, 50);
+        c.quadraticCurveTo(228, 40, 240, 70); c.quadraticCurveTo(192, 92, 142, 86);
+        c.quadraticCurveTo(94, 92, 66, 74); c.fill();
+        c.font = 'bold 48px sans-serif';
+        c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('S', 150, 148);
+      }
+    ].map(d => makeFlagTexture(d));
+
+    const flagPole = new THREE.Group();
+    const _pole = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.018, 1.0, 8), flatMat(0xb9bec7));
+    _pole.position.y = 0.5;
+    const _finial = new THREE.Mesh(new THREE.SphereGeometry(0.024, 10, 10), flatMat(0xd8b24a));
+    _finial.position.y = 1.01;
+    const flagMat = new THREE.MeshBasicMaterial({
+      map: FLAG_TEXTURES[0], side: THREE.DoubleSide, transparent: true, depthTest: false
+    });
+    const _flag = new THREE.Mesh(new THREE.PlaneGeometry(0.56, 0.373), flagMat);
+    _flag.position.set(0.29, 0.80, 0);          // 旗面左缘贴住杆顶
+    flagPole.add(_pole, _finial, _flag);
+    // 位置：小屋（方位 31°）旁；旗面正对观测者
+    const _flagAng = 23 * DEG, _flagDist = REF_DIST * 1.45;
+    flagPole.position.set(Math.sin(_flagAng) * _flagDist, 0, Math.cos(_flagAng) * _flagDist);
+    flagPole.rotation.y = Math.atan2(-flagPole.position.x, -flagPole.position.z);
+    flagPole.traverse(o => {
+      o.frustumCulled = false;
+      if (o.material) { o.material.transparent = true; o.material.depthTest = false; }
+      o.renderOrder = 21;
+    });
+    groundRefGroup.add(flagPole);
+    refObjects.push({ mesh: flagPole, unit: 0.0023 });   // 随「参照物大小」滑块一起缩放
+
+    // 参照物基座：当地 ENU 基（+X 东 / +Y 天顶 / +Z 北）的正交旋转
+    function groundBasisQuat(out) {
+      return out.setFromRotationMatrix(_gBasis.makeBasis(_gEast, _gUp, _gNorth));
+    }
+
+    // 每帧摆放地平面与参照物（随观测点、地轴、昼夜一起变化）
+    function updateGroundRefs() {
+      groundFrame();
+      _vFoot.copy(_gUp).multiplyScalar(EARTH_RADIUS).add(earthSystem.position);
+      groundRefGroup.position.copy(_vFoot);
+      groundRefGroup.quaternion.copy(groundBasisQuat(_gQuat));
+      refObjects.forEach(o => o.mesh.scale.setScalar(o.unit * refMul));
+      groundUniforms.uDay.value = skyUniforms.uDay.value;
+      // 暮光强度：太阳贴近地平线时，地面与天空一起泛暖橙（与天空穹顶共用同一判据）
+      groundUniforms.uTwilight.value =
+        THREE.MathUtils.clamp(1 - Math.abs(groundSunAlt) / 0.34, 0, 1) * skyUniforms.uDay.value;
+      // 地平面挂在相机上：球心 = 视线起点，地平线恒在 0° 高度角
+      groundPlate.position.copy(camera.position);
+      groundPlate.quaternion.copy(_gQuat);
+    }
+
+    const refSlider = document.getElementById('refScale');
+    const elRefVal = document.getElementById('vRef');
+    const btnRef = document.getElementById('btnRef');
+    refSlider.addEventListener('input', () => {
+      refMul = +refSlider.value / 100;
+      elRefVal.textContent = '×' + refMul.toFixed(2);
+    });
+    btnRef.addEventListener('click', () => {
+      showRef = !showRef;
+      btnRef.textContent = showRef ? '地面参照物：开' : '地面参照物：关';
+      btnRef.classList.toggle('on', showRef);
+      groundRefGroup.visible = showRef && systemMode === 'ground';
+    });
+
+    /* ---- 观测状态面板 ---- */
+    const elGTime = document.getElementById('vGTime');
+    const elGLoc = document.getElementById('vGLoc');
+    const elGSunAlt = document.getElementById('vGSunAlt');
+    const elGSky = document.getElementById('vGSky');
+    const elGMoonPhase = document.getElementById('vGMoonPhase');
+    const elGMoonPos = document.getElementById('vGMoonPos');
+
+    // 方位名称（以正北为 0°，向东为正）与某世界方向相对观测点的高度角/方位角
+    const AZ_NAMES = ['正北', '东北', '正东', '东南', '正南', '西南', '正西', '西北'];
+    const _gHud = new THREE.Vector3();
+    function groundAltAz(dirWorld) {
+      groundFrame();
+      const alt = Math.asin(THREE.MathUtils.clamp(dirWorld.dot(_gUp), -1, 1));
+      let az = Math.atan2(dirWorld.dot(_gEast), dirWorld.dot(_gNorth)) / DEG;
+      if (az < 0) az += 360;
+      return { alt, az };
+    }
+
+    function updateGroundHUD() {
+      elGTime.textContent = elTime.textContent;
+      const L = GROUND_LOCS[groundLoc];
+      elGLoc.textContent = `${L.name} · ${Math.abs(L.lat).toFixed(1)}°${L.lat >= 0 ? 'N' : 'S'} ` +
+                           `${Math.abs(L.lon).toFixed(1)}°${L.lon >= 0 ? 'E' : 'W'}`;
+      const altDeg = groundSunAlt / DEG;
+      elGSunAlt.textContent = `${altDeg.toFixed(1)}°`;
+      elGSky.textContent = altDeg > 8 ? '白昼' : altDeg > -6 ? '晨昏' : '夜间';
+      // 月亮：月相（由真实几何求得）与相对观测点的方位、高度
+      const ph = getPhase();
+      elGMoonPhase.textContent = `${ph.name} · 照亮 ${(ph.illum * 100).toFixed(0)}%`;
+      _gHud.copy(moonWorld()).sub(groundCamPos(_gP));
+      if (_gHud.lengthSq() > 1e-8) {
+        const { alt, az } = groundAltAz(_gHud.normalize());
+        elGMoonPos.textContent = alt < 0
+          ? `地平线下 ${Math.abs(alt / DEG).toFixed(0)}°`
+          : `${AZ_NAMES[Math.round(az / 45) % 8]} · ${(alt / DEG).toFixed(0)}°`;
+      }
+    }
+    setGroundLoc(0);
+
+    /* ================================================================
+       银河系模拟（MODEL 04）：棒旋星系程序化简化模型
+       —— 独立比例：1 单位 = 100 光年；太阳绕银心周期约 2.25 亿年
+       太阳系在银河尺度下小于一个像素，以脉动光点 + 轨道圆环标记
+    ================================================================ */
+    const GAL_SUN_R = 266;                      // 太阳距银心 2.66 万光年
+    const GAL_PERIOD_DAYS = 225e6 * 365.25;     // 银河年（太阳绕银心公转周期）
+    const galaxyGroup = new THREE.Group();
+    galaxyGroup.visible = false;
+    scene.add(galaxyGroup);
+    const _galBgColor = new THREE.Color(0x000004);
+
+    let galaxyView = 'free';
+    let galaxyTrans = null;
+    const GAL_FREE_POS = new THREE.Vector3(-420, 520, 640);
+    const _sunW = new THREE.Vector3(), _galP = new THREE.Vector3(), _galT = new THREE.Vector3();
+    const _galDirT = new THREE.Vector3();
+    const _followPrevG = new THREE.Vector3();
+    const elGalView = document.getElementById('vGalView');
+
+    // 固定种子伪随机 + 近似高斯（保证每次刷新星系形态一致）
+    let _gseed = 20261019;
+    function grand() { _gseed = (_gseed * 1103515245 + 12345) & 0x7fffffff; return _gseed / 0x7fffffff; }
+    function gGauss() { return (grand() + grand() + grand() + grand() - 2) * 1.732; }
+
+    // 柔和圆点贴图（星点 / 星云共用）
+    const galDotTex = (() => {
+      const c = document.createElement('canvas'); c.width = c.height = 64;
+      const x = c.getContext('2d');
+      const g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+      g.addColorStop(0, 'rgba(255,255,255,1)');
+      g.addColorStop(0.35, 'rgba(255,255,255,0.5)');
+      g.addColorStop(1, 'rgba(255,255,255,0)');
+      x.fillStyle = g; x.fillRect(0, 0, 64, 64);
+      return new THREE.CanvasTexture(c);
+    })();
+
+    function makeGalPoints(count, fill, opts) {
+      const pos = new Float32Array(count * 3), col = new Float32Array(count * 3);
+      const p = new THREE.Vector3(), c = new THREE.Color();
+      for (let i = 0; i < count; i++) {
+        fill(i, p, c);
+        pos[i * 3] = p.x; pos[i * 3 + 1] = p.y; pos[i * 3 + 2] = p.z;
+        col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+      const pts = new THREE.Points(g, new THREE.PointsMaterial({
+        size: opts.size, map: galDotTex, vertexColors: true, transparent: true,
+        opacity: opts.opacity, depthWrite: false, sizeAttenuation: true,
+        blending: opts.blend || THREE.AdditiveBlending
+      }));
+      pts.frustumCulled = false;
+      pts.renderOrder = opts.order || 1;
+      galaxyGroup.add(pts);
+      return pts;
+    }
+
+    // 文本标签精灵（旋臂 / 太阳标记）
+    function makeGalLabel(text, size) {
+      const c = document.createElement('canvas');
+      let x = c.getContext('2d');
+      x.font = '500 44px "Microsoft YaHei", "PingFang SC", sans-serif';
+      c.width = Math.ceil(x.measureText(text).width) + 30;
+      c.height = 64;
+      x = c.getContext('2d');
+      x.font = '500 44px "Microsoft YaHei", "PingFang SC", sans-serif';
+      x.fillStyle = 'rgba(170,200,255,0.92)';
+      x.textBaseline = 'middle';
+      x.shadowColor = 'rgba(0,0,0,0.9)'; x.shadowBlur = 8;
+      x.fillText(text, 15, 34);
+      const t = new THREE.CanvasTexture(c);
+      t.colorSpace = THREE.SRGBColorSpace;
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, depthTest: false, depthWrite: false }));
+      sp.scale.set(size * c.width / c.height, size, 1);
+      sp.renderOrder = 30;
+      return sp;
+    }
+
+    /* ---- 差速自转盘面：恒星沿本轮椭圆轨道运行（密度波），ω = V0/a → 内圈快、外圈慢 ---- */
+    const ARM_B = 0.42, ARM_R0 = 55;
+    const cArmBlue = new THREE.Color(0x9db8ff), cArmWhite = new THREE.Color(0xf2f4ff);
+    const cArmYellow = new THREE.Color(0xffe2b0), cArmRed = new THREE.Color(0xff9a66);
+    const OMEGA_P = Math.PI * 2 / GAL_PERIOD_DAYS;   // 密度波图案进动角速度 ≈ 太阳公转角速度（近共转）
+    const V0 = OMEGA_P * GAL_SUN_R;                  // 平坦旋转曲线：v ≈ 常数 → ω(r) = V0 / r
+    const galShared = {                              // 共享 uniforms（各材质浅拷贝，引用同一 value 对象）
+      uSimDays: { value: 0 }, uV0: { value: V0 }, uOmegaP: { value: OMEGA_P }, uPx: { value: 900 }
+    };
+    const GAL_VS = `
+      uniform float uSimDays, uV0, uOmegaP, uPx;
+      attribute float aA, aE, aAlpha, aTh0, aY, aSize;
+      attribute vec3 aColor;
+      varying vec3 vColor;
+      void main() {
+        float th = aTh0 + uSimDays * (uV0 / aA);                  // 沿轨道公转（内圈快、外圈慢）
+        vec2 o = vec2(cos(th) * aA, sin(th) * aA * (1.0 - aE));   // 本轮椭圆轨道
+        float al = aAlpha + uSimDays * uOmegaP;                   // 轨道朝向随密度波图案缓慢进动
+        float ca = cos(al), sa = sin(al);
+        vec3 p = vec3(o.x * ca - o.y * sa, aY, o.x * sa + o.y * ca);
+        vec4 mv = modelViewMatrix * vec4(p, 1.0);
+        gl_PointSize = min(aSize * uPx / max(-mv.z, 1.0), 26.0);
+        vColor = aColor;
+        gl_Position = projectionMatrix * mv;
+      }`;
+    const GAL_FS = `
+      uniform sampler2D uMap; uniform float uOpacity;
+      varying vec3 vColor;
+      void main() {
+        float a = texture2D(uMap, gl_PointCoord).a * uOpacity;
+        if (a < 0.02) discard;
+        gl_FragColor = vec4(vColor, a);
+      }`;
+    function makeGalOrbitPoints(count, fill, opts) {
+      const aA = new Float32Array(count), aE = new Float32Array(count), aAlpha = new Float32Array(count);
+      const aTh0 = new Float32Array(count), aY = new Float32Array(count), aSize = new Float32Array(count);
+      const col = new Float32Array(count * 3);
+      const o = {}, c = new THREE.Color();
+      for (let i = 0; i < count; i++) {
+        fill(i, o, c);
+        aA[i] = o.a; aE[i] = o.e; aAlpha[i] = o.alpha; aTh0[i] = o.th0; aY[i] = o.y;
+        aSize[i] = (opts.sMin || 1.2) + grand() * ((opts.sMax || 1.8) - (opts.sMin || 1.2));
+        col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(count * 3), 3));
+      g.setAttribute('aA', new THREE.BufferAttribute(aA, 1));
+      g.setAttribute('aE', new THREE.BufferAttribute(aE, 1));
+      g.setAttribute('aAlpha', new THREE.BufferAttribute(aAlpha, 1));
+      g.setAttribute('aTh0', new THREE.BufferAttribute(aTh0, 1));
+      g.setAttribute('aY', new THREE.BufferAttribute(aY, 1));
+      g.setAttribute('aSize', new THREE.BufferAttribute(aSize, 1));
+      g.setAttribute('aColor', new THREE.BufferAttribute(col, 3));
+      const pts = new THREE.Points(g, new THREE.ShaderMaterial({
+        uniforms: { ...galShared, uMap: { value: galDotTex }, uOpacity: { value: opts.opacity } },
+        vertexShader: GAL_VS, fragmentShader: GAL_FS,
+        transparent: true, depthWrite: false, blending: opts.blend || THREE.AdditiveBlending
+      }));
+      pts.frustumCulled = false;
+      pts.renderOrder = opts.order || 1;
+      galaxyGroup.add(pts);
+      return pts;
+    }
+    // 旋臂轨道：alpha(a) 取对数螺旋（与太阳标记 _sunPhi 同构，太阳始终位于臂 0 的密度增强处）
+    function armOrbit(o, armIdx, eMin, eMax) {
+      o.a = ARM_R0 * Math.exp(ARM_B * Math.pow(grand(), 0.72) * 4.6) * (1 + gGauss() * 0.04);
+      o.e = eMin + grand() * (eMax - eMin);
+      o.alpha = Math.log(o.a / ARM_R0) / ARM_B + armIdx * Math.PI / 2 + gGauss() * 0.05;
+      o.th0 = grand() * Math.PI * 2;
+      o.y = gGauss() * (grand() < 0.15 ? 9 : 2.8);   // 薄盘为主，少量厚盘星
+    }
+
+    // 核球 + 中央棒：随密度波图案刚体进动（patternGroup）；盘面恒星则各自差速公转
+    const patternGroup = new THREE.Group();
+    galaxyGroup.add(patternGroup);
+    patternGroup.add(makeGalPoints(9000, (i, p, c) => {   // 核球：老年恒星，黄橙色
+      const r = Math.pow(grand(), 1.6) * 95;
+      const a = grand() * Math.PI * 2, b2 = Math.acos(grand() * 2 - 1);
+      p.set(r * Math.sin(b2) * Math.cos(a), r * Math.cos(b2) * 0.52, r * Math.sin(b2) * Math.sin(a));
+      c.setHSL(0.09 + grand() * 0.04, 0.55, 0.6 + grand() * 0.25);
+    }, { size: 1.6, opacity: 0.95 }));
+    patternGroup.add(makeGalPoints(6000, (i, p, c) => {   // 中央棒：与旋臂起点相接的拉长椭球
+      const u = gGauss() * 30, v = gGauss() * 9, w = gGauss() * 4.5, A = 0.44;
+      p.set(u * Math.cos(A) - v * Math.sin(A), w, u * Math.sin(A) + v * Math.cos(A));
+      c.setHSL(0.08 + grand() * 0.03, 0.6, 0.55 + grand() * 0.25);
+    }, { size: 1.5, opacity: 0.9 }));
+    makeGalPoints(2400, (i, p, c) => {   // 晕族老年星（球状分布，公转极慢，近似静态）
+      const r = 140 + Math.pow(grand(), 2.2) * 900;
+      const a = grand() * Math.PI * 2, b2 = Math.acos(grand() * 2 - 1);
+      p.set(r * Math.sin(b2) * Math.cos(a), r * Math.cos(b2) * 0.85, r * Math.sin(b2) * Math.sin(a));
+      c.setHSL(0.07 + grand() * 0.05, 0.4, 0.35 + grand() * 0.2);
+    }, { size: 1.2, opacity: 0.5 });
+
+    makeGalOrbitPoints(26000, (i, o, c) => {   // 四条主旋臂恒星（差速公转，内快外慢）
+      armOrbit(o, i % 4, 0.15, 0.4);
+      const t = grand();
+      c.copy(t < 0.55 ? cArmBlue : t < 0.8 ? cArmWhite : t < 0.95 ? cArmYellow : cArmRed)
+        .multiplyScalar(0.55 + grand() * 0.45);
+    }, { opacity: 0.9 });
+    makeGalOrbitPoints(3200, (i, o, c) => {    // 旋臂亮星（放大加亮，让臂形更醒目）
+      armOrbit(o, i % 4, 0.15, 0.4);
+      const t = grand();
+      c.copy(t < 0.55 ? cArmBlue : t < 0.8 ? cArmWhite : t < 0.95 ? cArmYellow : cArmRed)
+        .multiplyScalar((0.55 + grand() * 0.45) * 1.6);
+    }, { sMin: 2.6, sMax: 3.8, opacity: 0.85 });
+    makeGalOrbitPoints(9000, (i, o, c) => {    // 旋臂之间的盘面背景星（相位随机，不成臂）
+      o.a = 40 + Math.pow(grand(), 1.4) * 460;
+      o.e = grand() * 0.1;
+      o.alpha = grand() * Math.PI * 2;
+      o.th0 = grand() * Math.PI * 2;
+      o.y = gGauss() * 3.2;
+      const t = grand();
+      c.copy(t < 0.5 ? cArmBlue : t < 0.85 ? cArmWhite : cArmYellow).multiplyScalar(0.3 + grand() * 0.3);
+    }, { sMin: 1.0, sMax: 1.4, opacity: 0.55 });
+    makeGalOrbitPoints(500, (i, o, c) => {     // 银心吸积流火花（差速最快处，黑洞特写时可见旋涡）
+      o.a = 3.4 + grand() * 6.6;
+      o.e = grand() * 0.35;
+      o.alpha = grand() * Math.PI * 2;
+      o.th0 = grand() * Math.PI * 2;
+      o.y = gGauss() * 0.35;
+      c.setHSL(0.07 + grand() * 0.06, 0.9, 0.55 + grand() * 0.25);
+    }, { sMin: 0.5, sMax: 1.1, opacity: 0.9, order: 4 });
+    makeGalOrbitPoints(260, (i, o, c) => {     // 旋臂上的电离氢区（粉红星云结点）
+      armOrbit(o, i % 4, 0.1, 0.3);
+      c.setRGB(1.0, 0.32 + grand() * 0.15, 0.55 + grand() * 0.2).multiplyScalar(0.7 + grand() * 0.3);
+    }, { sMin: 4.8, sMax: 6.4, opacity: 0.8, order: 2 });
+    makeGalOrbitPoints(7000, (i, o, c) => {    // 暗尘埃带（贴旋臂内缘，正常混合压暗背景星光）
+      o.a = ARM_R0 * Math.exp(ARM_B * Math.pow(grand(), 0.72) * 4.6) * (1 + gGauss() * 0.05);
+      o.e = grand() * 0.15;
+      o.alpha = Math.log(o.a / ARM_R0) / ARM_B + (i % 4) * Math.PI / 2 + gGauss() * 0.04 - 0.015;
+      o.th0 = grand() * Math.PI * 2;
+      o.y = gGauss() * 1.6;
+      c.setRGB(0.10, 0.05, 0.035).multiplyScalar(0.5 + grand() * 0.5);
+    }, { sMin: 6.0, sMax: 9.0, opacity: 0.5, blend: THREE.NormalBlending, order: 3 });
+
+    // 核球辉光（近距离观测银心时按相机距离淡出，避免糊满画面）
+    const bulgeGlow = makeGlowSprite('rgba(255,240,205,1)', 'rgba(255,190,120,0.35)', 210);
+    bulgeGlow.material.opacity = 0.5;
+    galaxyGroup.add(bulgeGlow);
+
+    // 银心黑洞人马座 A*：视界球 + 光子环辉光 + 吸积盘（艺术化示意）
+    const accretionTex = (() => {
+      const c = document.createElement('canvas'); c.width = c.height = 256;
+      const x = c.getContext('2d');
+      const g = x.createRadialGradient(128, 128, 0, 128, 128, 128);
+      g.addColorStop(0.0, 'rgba(0,0,0,0)');
+      g.addColorStop(0.30, 'rgba(255,244,220,0.95)');
+      g.addColorStop(0.42, 'rgba(255,190,110,0.75)');
+      g.addColorStop(0.55, 'rgba(255,120,50,0.28)');
+      g.addColorStop(1, 'rgba(255,80,30,0)');
+      x.fillStyle = g; x.fillRect(0, 0, 256, 256);
+      // 角向明暗热斑：纯径向渐变旋转时不可见，叠加斑块后差速旋转才能被看出来
+      for (let i = 0; i < 30; i++) {
+        const a0 = grand() * Math.PI * 2, rr = 0.3 + grand() * 0.65, sz = 8 + grand() * 22;
+        const px = 128 + Math.cos(a0) * rr * 126, py = 128 + Math.sin(a0) * rr * 126;
+        const gg = x.createRadialGradient(px, py, 0, px, py, sz);
+        gg.addColorStop(0, grand() < 0.55 ? 'rgba(255,235,200,0.22)' : 'rgba(0,0,0,0.26)');
+        gg.addColorStop(1, 'rgba(0,0,0,0)');
+        x.fillStyle = gg;
+        x.beginPath(); x.arc(px, py, sz, 0, Math.PI * 2); x.fill();
+      }
+      const t = new THREE.CanvasTexture(c);
+      t.colorSpace = THREE.SRGBColorSpace;
+      return t;
+    })();
+    // 吸积盘双层差速：内层热区快转、外层冷区慢转（UV 重映射到贴图对应半径带）
+    function remapRingUV(geo, rIn, rOut, tIn, tOut) {
+      const pos = geo.attributes.position, uv = geo.attributes.uv;
+      for (let i = 0; i < uv.count; i++) {
+        const x = pos.getX(i), y = pos.getY(i), r = Math.hypot(x, y) || 1;
+        const f = tIn + (r - rIn) / (rOut - rIn) * (tOut - tIn);
+        uv.setXY(i, 0.5 + x / r * f, 0.5 + y / r * f);
+      }
+    }
+    const accretionIn = new THREE.Mesh(
+      new THREE.RingGeometry(3.0, 5.6, 72, 1),
+      new THREE.MeshBasicMaterial({ map: accretionTex, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false })
+    );
+    remapRingUV(accretionIn.geometry, 3.0, 5.6, 0.295, 0.56);
+    const accretionOut = new THREE.Mesh(
+      new THREE.RingGeometry(5.4, 10.0, 72, 1),
+      new THREE.MeshBasicMaterial({ map: accretionTex, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false })
+    );
+    remapRingUV(accretionOut.geometry, 5.4, 10.0, 0.56, 1.0);
+    accretionIn.rotation.x = accretionOut.rotation.x = -Math.PI / 2 + 0.28;
+    const bhGroup = new THREE.Group();
+    bhGroup.add(new THREE.Mesh(new THREE.SphereGeometry(2.1, 32, 32), new THREE.MeshBasicMaterial({ color: 0x000000 })));
+    bhGroup.add(accretionIn, accretionOut);
+    const bhRing = makeGlowSprite('rgba(255,236,190,0.9)', 'rgba(255,170,80,0.3)', 5.5);
+    bhGroup.add(bhRing);
+    galaxyGroup.add(bhGroup);
+
+    // 太阳标记：以真实角速度绕银心公转（保持位于猎户支臂），脉动光点 + 标签 + 太阳圆轨道
+    const _sunPhi = Math.log(GAL_SUN_R / ARM_R0) / ARM_B;
+    const GAL_Z_W = Math.PI * 2 / (7.0e7 * 365.25);   // 银盘上下摆动角速度：往返周期约 7000 万年
+    const sunMarker = new THREE.Group();
+    sunMarker.position.set(GAL_SUN_R * Math.cos(_sunPhi), 0.5, GAL_SUN_R * Math.sin(_sunPhi));
+    sunMarker.add(new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 16), new THREE.MeshBasicMaterial({ color: 0xffe9b0 })));
+    const sunPulse = makeGlowSprite('rgba(255,240,190,1)', 'rgba(255,200,120,0.4)', 0.9);
+    const sunLabelG = makeGalLabel('太阳系 · 猎户支臂', 13);
+    sunLabelG.position.set(0, 8, 0);
+    sunMarker.add(sunPulse, sunLabelG);
+    galaxyGroup.add(sunMarker);
+    // 行星压缩时间示意：真实银河速率下行星公转快到无法逐帧呈现，
+    // 公转/自转周期比例真实 · 时间压缩 3e-7（太阳绕银心一圈期间地球绕日约 67 圈，真实为 2.25 亿圈）
+    // 轨道间距按 0.6·√AU 幂律压缩 · 行星尺寸按 0.2·(R/R☉)^0.4 对数压缩（太阳明显大于所有行星）
+    // 整体再缩 0.3 倍：真实太阳系在银河尺度近乎为零，仅为可看见的示意
+    const MINI_K = 3e-7;
+    const PLANETS_G = [
+      { n: '水星', r: 0.37, T: 87.97, rot: 58.65, c: 0x9c8f84, s: 0.021 },
+      { n: '金星', r: 0.51, T: 224.7, rot: -243.02, c: 0xd8b98a, s: 0.030 },
+      { n: '地球', r: 0.60, T: 365.25, rot: 0.997, c: 0x5f8fd8, s: 0.031 },
+      { n: '火星', r: 0.74, T: 686.98, rot: 1.026, c: 0xc46a4a, s: 0.024 },
+      { n: '木星', r: 1.37, T: 4332.6, rot: 0.414, c: 0xc9a878, s: 0.080 },
+      { n: '土星', r: 1.86, T: 10759, rot: 0.444, c: 0xd8c08a, s: 0.074 },
+      { n: '天王星', r: 2.63, T: 30687, rot: -0.718, c: 0x9fd4d8, s: 0.053 },
+      { n: '海王星', r: 3.29, T: 60190, rot: 0.671, c: 0x5f7fd8, s: 0.053 }
+    ];
+    const miniGroup = new THREE.Group();
+    sunMarker.add(miniGroup);
+    // 黄道面与银盘面夹角约 60.2°（真实值）：行星系是一个斜置小圆盘，跟随太阳整体飞行
+    miniGroup.rotation.set(THREE.MathUtils.degToRad(60.2), 0, 0.8);
+    miniGroup.scale.setScalar(0.3);
+    // 银河尺度下不画行星轨道圈，只保留行星本体 + 渐隐甩尾
+    const TRAIL_SEG = 48, TRAIL_ARC = 0.9;   // 尾迹 48 段 · 0.9 弧度（约 52°）
+    const miniPlanets = PLANETS_G.map(p => {
+      const m = new THREE.Mesh(new THREE.SphereGeometry(p.s, 10, 10), new THREE.MeshBasicMaterial({ color: p.c }));
+      miniGroup.add(m);
+      // 甩尾：行星身后的一段圆弧，加色混合 + 头亮尾黑实现渐隐，随行星同步旋转
+      const tp = new Float32Array((TRAIL_SEG + 1) * 3), tc = new Float32Array((TRAIL_SEG + 1) * 3);
+      const base = new THREE.Color(p.c);
+      for (let i = 0; i <= TRAIL_SEG; i++) {
+        const ta = -i / TRAIL_SEG * TRAIL_ARC;
+        tp[i * 3] = Math.cos(ta) * p.r; tp[i * 3 + 2] = Math.sin(ta) * p.r;
+        const f = Math.pow(1 - i / TRAIL_SEG, 1.6) * 0.85;
+        tc[i * 3] = base.r * f; tc[i * 3 + 1] = base.g * f; tc[i * 3 + 2] = base.b * f;
+      }
+      const tg = new THREE.BufferGeometry();
+      tg.setAttribute('position', new THREE.BufferAttribute(tp, 3));
+      tg.setAttribute('color', new THREE.BufferAttribute(tc, 3));
+      const trail = new THREE.Line(tg, new THREE.LineBasicMaterial({
+        vertexColors: true, transparent: true, opacity: 0.9,
+        blending: THREE.AdditiveBlending, depthWrite: false
+      }));
+      miniGroup.add(trail);
+      return { mesh: m, trail, r: p.r, w: Math.PI * 2 / p.T, rw: Math.PI * 2 / p.rot };
+    });
+    const _galCircle = [];
+    for (let i = 0; i <= 180; i++) {
+      const a = i / 180 * Math.PI * 2;
+      _galCircle.push(new THREE.Vector3(GAL_SUN_R * Math.cos(a), 0.5, GAL_SUN_R * Math.sin(a)));
+    }
+    galaxyGroup.add(new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(_galCircle),
+      new THREE.LineBasicMaterial({ color: 0x6ea8ff, transparent: true, opacity: 0.25 })
+    ));
+
+    // 球状星团（晕族）+ 大小麦哲伦云（卫星星系）
+    for (let i = 0; i < 22; i++) {
+      const gc = makeGlowSprite('rgba(255,244,214,0.9)', 'rgba(255,220,170,0.25)', 5 + grand() * 8);
+      const r = 130 + grand() * 390, a = grand() * Math.PI * 2, b2 = Math.acos(grand() * 2 - 1);
+      gc.position.set(r * Math.sin(b2) * Math.cos(a), r * Math.cos(b2) * 0.9, r * Math.sin(b2) * Math.sin(a));
+      gc.material.opacity = 0.22 + grand() * 0.14;
+      galaxyGroup.add(gc);
+    }
+    const lmc = makeGalPoints(1100, (i, p, c) => {
+      p.set(gGauss() * 11, gGauss() * 7, gGauss() * 9);
+      c.setHSL(0.58 + grand() * 0.06, 0.4, 0.6 + grand() * 0.3);
+    }, { size: 2.2, opacity: 0.8 });
+    lmc.position.set(430, -700, 380);
+    const smc = makeGalPoints(420, (i, p, c) => {
+      p.set(gGauss() * 6.5, gGauss() * 4.5, gGauss() * 5.5);
+      c.setHSL(0.58 + grand() * 0.06, 0.35, 0.6 + grand() * 0.3);
+    }, { size: 1.8, opacity: 0.8 });
+    smc.position.set(560, -800, 470);
+
+    // 旋臂标注（可开关）：挂入 patternGroup，随密度波图案一起进动，保持贴住旋臂
+    const armLabelGroup = new THREE.Group();
+    patternGroup.add(armLabelGroup);
+    ['人马臂', '盾牌-半人马臂', '矩尺臂', '英仙臂'].forEach((name, k) => {
+      const th = 3.4, r = ARM_R0 * Math.exp(ARM_B * th);
+      const lb = makeGalLabel(name, 20);
+      lb.position.set(r * Math.cos(k * Math.PI / 2 + th), 7, r * Math.sin(k * Math.PI / 2 + th));
+      armLabelGroup.add(lb);
+    });
+    const bhLabel = makeGalLabel('银心 · 人马座 A*', 18);
+    bhLabel.position.set(0, 16, 0);
+    armLabelGroup.add(bhLabel);
+
+    // 每帧：差速自转驱动（uniform 时间）+ 图案进动 + 太阳公转 + 行星示意 + 吸积盘 + 辉光
+    let galT = 0;
+    function updateGalaxy(dt) {
+      galT += dt;
+      galShared.uSimDays.value = simDays;
+      galShared.uPx.value = renderer.domElement.height / (2 * Math.tan(camera.fov * Math.PI / 360));
+      patternGroup.rotation.y = -simDays * OMEGA_P;                // 核球+棒+标注随密度波图案进动（负号与盘面恒星/太阳同向）
+      const sa = _sunPhi + simDays * OMEGA_P;                      // 太阳以真实角速度绕银心公转
+      // 银盘上下小幅摆动：周期约 7000 万年、振幅约 250 光年，整个行星系一起跟随
+      const sy = 0.5 + Math.sin(simDays * GAL_Z_W + 0.9) * 2.5;
+      sunMarker.position.set(GAL_SUN_R * Math.cos(sa), sy, GAL_SUN_R * Math.sin(sa));
+      const mt = simDays * MINI_K;                                 // 行星压缩时间示意（周期比例真实）
+      for (const pl of miniPlanets) {
+        const a = mt * pl.w;
+        pl.mesh.position.set(Math.cos(a) * pl.r, 0, Math.sin(a) * pl.r);
+        pl.trail.rotation.y = -a;                                  // 甩尾拖在行星身后
+        pl.mesh.rotation.y = mt * pl.rw;                           // 自转（负 = 逆行，同一压缩时间轴）
+      }
+      accretionIn.rotation.z += dt * 1.15;                         // 吸积盘内层快、外层慢
+      accretionOut.rotation.z += dt * 0.38;
+      accretionIn.material.opacity = 0.85 + Math.sin(galT * 2.3) * 0.12;
+      accretionOut.material.opacity = 0.42 + Math.sin(galT * 1.7) * 0.1;
+      bhRing.material.opacity = 0.55 + Math.sin(galT * 1.9) * 0.18;
+      sunPulse.scale.setScalar(0.8 + Math.sin(galT * 3) * 0.2);
+      const dc = camera.position.length();                         // 黑洞特写时淡出核球辉光，避免糊屏
+      bulgeGlow.material.opacity = THREE.MathUtils.clamp((dc - 90) / 260, 0, 0.5);
+    }
+
+    /* ---- 银河系视角系统：自由 / 俯视 / 侧视 / 银心黑洞 / 太阳位置 ---- */
+    function setGalaxyView(gv) {
+      if ((gv === galaxyView && !galaxyTrans) || modeAnim) return;
+      galaxyView = gv;
+      document.querySelectorAll('#viewsGalaxy .btn-view').forEach(b =>
+        b.classList.toggle('active', b.dataset.gv === gv));
+      elGalView.textContent = document.querySelector(`#viewsGalaxy .btn-view[data-gv="${gv}"]`).textContent;
+      controls.enabled = false;
+      if (gv === 'center' || gv === 'sun') {
+        controls.minDistance = 2; controls.maxDistance = gv === 'center' ? 300 : 500;
+      } else {
+        controls.minDistance = 20; controls.maxDistance = 6000;
+      }
+      camera.up.set(0, 1, 0);
+      galaxyTrans = { t: 0, dur: 1.6, fromPos: camera.position.clone(), fromTarget: controls.target.clone() };
+    }
+    document.querySelectorAll('#viewsGalaxy .btn-view').forEach(b =>
+      b.addEventListener('click', () => setGalaxyView(b.dataset.gv)));
+
+    // 任何视角下拖拽画面 = 回到自由视角（不再打断式飞回，保持当前机位）
+    renderer.domElement.addEventListener('pointerdown', () => {
+      if (systemMode !== 'galaxy' || modeAnim || galaxyView === 'free' || galaxyTrans) return;
+      galaxyView = 'free'; galaxyTrans = null;
+      controls.enabled = true;
+      controls.minDistance = 3; controls.maxDistance = 6000;
+      document.querySelectorAll('#viewsGalaxy .btn-view').forEach(b =>
+        b.classList.toggle('active', b.dataset.gv === 'free'));
+      elGalView.textContent = '自由视角';
+    });
+
+    function galaxyDestPos(out) {
+      if (galaxyView === 'top') return out.set(0, 980, 90);
+      if (galaxyView === 'edge') return out.set(0, 55, 1150);
+      if (galaxyView === 'center') return out.set(6.5, 4.5, 14);
+      if (galaxyView === 'sun') return out.copy(_sunW).add(_galDirT.set(3.0, 1.8, 4.2));
+      return out.copy(GAL_FREE_POS);
+    }
+    function galaxyDestTarget(out) {
+      if (galaxyView === 'sun') return out.copy(_sunW);
+      return out.set(0, 0, 0);
+    }
+
+    function updateGalaxyCamera(dt) {
+      sunMarker.getWorldPosition(_sunW);
+      if (galaxyTrans) {
+        galaxyTrans.t += dt / galaxyTrans.dur;
+        const k = easeInOut(Math.min(galaxyTrans.t, 1));
+        camera.position.lerpVectors(galaxyTrans.fromPos, galaxyDestPos(_galP), k);
+        controls.target.lerpVectors(galaxyTrans.fromTarget, galaxyDestTarget(_galT), k);
+        camera.lookAt(controls.target);
+        if (galaxyTrans.t >= 1) {
+          galaxyTrans = null;
+          controls.enabled = true;               // 过渡结束释放鼠标
+          if (galaxyView === 'sun') _followPrevG.copy(_sunW);
+        }
+        return;
+      }
+      if (galaxyView === 'sun') {
+        // 太阳标记随银河自转移动：相机与目标跟随平移，拖拽/滚轮可用
+        _followDelta.copy(_sunW).sub(_followPrevG);
+        camera.position.add(_followDelta);
+        controls.target.copy(_sunW);
+        _followPrevG.copy(_sunW);
+        controls.update();
+      } else {
+        controls.update();
+      }
+      const near = (galaxyView === 'center' || galaxyView === 'sun') ? 0.05 : 0.5;
+      if (camera.near !== near) { camera.near = near; camera.far = 30000; camera.updateProjectionMatrix(); }
+    }
+
+    // 旋臂标注开关
+    let showArmLabels = true;
+    const btnArms = document.getElementById('btnArms');
+    btnArms.addEventListener('click', () => {
+      showArmLabels = !showArmLabels;
+      armLabelGroup.visible = showArmLabels;
+      btnArms.textContent = showArmLabels ? '旋臂标注：开' : '旋臂标注：关';
+      btnArms.classList.toggle('on', showArmLabels);
+    });
+    armLabelGroup.visible = true;
+
+    // 银河系状态面板
+    const elGalTime = document.getElementById('vGalTime');
+    const elGalSun = document.getElementById('vGalSun');
+    function updateGalaxyHUD() {
+      elGalTime.textContent = (simDays / 365.25 / 1e6).toFixed(2) + ' 百万年';
+      elGalSun.innerHTML = ((simDays / GAL_PERIOD_DAYS % 1) * 100).toFixed(1) + '<em>% · 周期 2.25 亿年</em>';
+    }
+
+    /* ================================================================
+       超星系团模拟（MODEL 05）：拉尼亚凯亚 · 巨引源流动
+       —— 1 单位 = 100 万光年；本星系群固定于原点（流动参考系），
+          星系沿丝状结构以真实流速（约 600 km/s）流向巨引源
+    ================================================================ */
+    const superGroup = new THREE.Group();
+    superGroup.visible = false;
+    scene.add(superGroup);
+    const SUPER_FLOW_V = 5.48e-12;   // 600 km/s → 每天位移量（单位 = 百万光年）
+    const SUPER_GA = new THREE.Vector3(-118, 14, -112);   // 巨引源：约 1.6 亿光年外矩尺座方向
+    const SUPER_FREE_POS = new THREE.Vector3(-300, 200, 380);
+    let superView = 'free';
+    let superTrans = null;
+
+    // 流动星系着色器：每个星系沿指向巨引源的方向匀速流动，走完全程后回起点重生（首尾淡入淡出）
+    const superShared = { uSimT: { value: 0 }, uPx: { value: 900 } };
+    const SUPER_VS = `
+      uniform float uSimT, uPx;
+      attribute vec3 aDir, aFlow;
+      attribute float aSize;
+      attribute vec3 aColor;
+      varying vec3 vColor;
+      varying float vFade;
+      void main() {
+        float d = mod(uSimT * aFlow.x + aFlow.z, aFlow.y);        // 已流距离（环绕重生）
+        float w = d / aFlow.y;
+        vFade = smoothstep(0.0, 0.08, w) * (1.0 - smoothstep(0.72, 1.0, w));
+        vec4 mv = modelViewMatrix * vec4(position + aDir * d, 1.0);
+        gl_PointSize = min(aSize * uPx / max(-mv.z, 1.0), 14.0);
+        vColor = aColor;
+        gl_Position = projectionMatrix * mv;
+      }`;
+    const SUPER_FS = `
+      uniform sampler2D uMap; uniform float uOpacity;
+      varying vec3 vColor; varying float vFade;
+      void main() {
+        float a = texture2D(uMap, gl_PointCoord).a * uOpacity * vFade;
+        if (a < 0.02) discard;
+        gl_FragColor = vec4(vColor, a);
+      }`;
+    function makeSuperFlowPoints(count, fill, opts) {
+      const pos = new Float32Array(count * 3), col = new Float32Array(count * 3);
+      const dir = new Float32Array(count * 3), flow = new Float32Array(count * 3);
+      const size = new Float32Array(count);
+      const p = new THREE.Vector3(), c = new THREE.Color(), d = new THREE.Vector3();
+      for (let i = 0; i < count; i++) {
+        fill(i, p, c, d);
+        const wrap = p.distanceTo(SUPER_GA) * 0.92;
+        pos[i * 3] = p.x; pos[i * 3 + 1] = p.y; pos[i * 3 + 2] = p.z;
+        dir[i * 3] = d.x; dir[i * 3 + 1] = d.y; dir[i * 3 + 2] = d.z;
+        flow[i * 3] = SUPER_FLOW_V * (0.55 + grand() * 0.9);   // 流速差异（均值约 600 km/s）
+        flow[i * 3 + 1] = wrap;                                // 流程长度 = 距巨引源路程
+        flow[i * 3 + 2] = grand() * wrap;                      // 相位错开，避免整齐重生
+        size[i] = (opts.sMin || 1.5) + grand() * ((opts.sMax || 2.4) - (opts.sMin || 1.5));
+        col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      g.setAttribute('aDir', new THREE.BufferAttribute(dir, 3));
+      g.setAttribute('aFlow', new THREE.BufferAttribute(flow, 3));
+      g.setAttribute('aSize', new THREE.BufferAttribute(size, 1));
+      g.setAttribute('aColor', new THREE.BufferAttribute(col, 3));
+      const pts = new THREE.Points(g, new THREE.ShaderMaterial({
+        uniforms: { ...superShared, uMap: { value: galDotTex }, uOpacity: { value: opts.opacity } },
+        vertexShader: SUPER_VS, fragmentShader: SUPER_FS,
+        transparent: true, depthWrite: false, blending: THREE.AdditiveBlending
+      }));
+      pts.frustumCulled = false;
+      pts.renderOrder = opts.order || 1;
+      superGroup.add(pts);
+      return pts;
+    }
+
+    // 丝状结构：28 条弯曲流线从外围壳层汇向巨引源（二次贝塞尔），星系散布在流线管内
+    const filPaths = [];
+    for (let f = 0; f < 28; f++) {
+      const r0 = 230 + grand() * 100;
+      const a = grand() * Math.PI * 2, b2 = Math.acos(grand() * 2 - 1);
+      const start = new THREE.Vector3(
+        r0 * Math.sin(b2) * Math.cos(a),
+        r0 * Math.cos(b2) * 0.45,          // 超星系团略呈盘状压扁
+        r0 * Math.sin(b2) * Math.sin(a));
+      const mid = start.clone().lerp(SUPER_GA, 0.5)
+        .add(new THREE.Vector3(gGauss(), gGauss() * 0.5, gGauss()).multiplyScalar(24));
+      const n = 90 + (grand() * 60 | 0);
+      for (let i = 0; i < n; i++) {
+        const t = i / (n - 1);
+        const q = new THREE.Vector3()
+          .addScaledVector(start, (1 - t) * (1 - t))
+          .addScaledVector(mid, 2 * (1 - t) * t)
+          .addScaledVector(SUPER_GA, t * t);
+        const spread = 2 + 7 * t * (1 - t);   // 管径：中段粗、两端收束
+        q.x += gGauss() * spread; q.y += gGauss() * spread * 0.6; q.z += gGauss() * spread;
+        filPaths.push(q);
+      }
+    }
+    const _fc1 = new THREE.Color(0xdde4ff), _fc2 = new THREE.Color(0xffe8c0), _fc3 = new THREE.Color(0xaac4ff);
+    makeSuperFlowPoints(3200, (i, p, c, d) => {   // 丝状结构星系流
+      p.copy(filPaths[(i * 7919) % filPaths.length]);
+      d.copy(SUPER_GA).sub(p).normalize();
+      const t = grand();
+      c.copy(t < 0.5 ? _fc1 : t < 0.78 ? _fc2 : _fc3).multiplyScalar(0.4 + grand() * 0.5);
+    }, { sMin: 1.4, sMax: 2.4, opacity: 0.85 });
+    makeSuperFlowPoints(700, (i, p, c, d) => {    // 亮星系（更醒目，暖白偏黄）
+      p.copy(filPaths[(i * 5381 + 337) % filPaths.length]);
+      d.copy(SUPER_GA).sub(p).normalize();
+      c.setHSL(0.09 + grand() * 0.05, 0.35, 0.62 + grand() * 0.25);
+    }, { sMin: 2.8, sMax: 4.2, opacity: 0.9 });
+    makeSuperFlowPoints(900, (i, p, c, d) => {    // 丝状结构之间的零散场星系
+      const r = 60 + Math.pow(grand(), 0.7) * 240;
+      const a = grand() * Math.PI * 2, b2 = Math.acos(grand() * 2 - 1);
+      p.set(r * Math.sin(b2) * Math.cos(a), r * Math.cos(b2) * 0.5, r * Math.sin(b2) * Math.sin(a));
+      d.copy(SUPER_GA).sub(p).normalize();
+      c.setHSL(0.6 + grand() * 0.05, 0.25, 0.5 + grand() * 0.2).multiplyScalar(0.35 + grand() * 0.3);
+    }, { sMin: 1.0, sMax: 1.8, opacity: 0.5 });
+
+    // 远景背景星系（静态壳层，营造纵深，不参与流动）
+    (() => {
+      const N = 1600, pos = new Float32Array(N * 3), col = new Float32Array(N * 3);
+      const c = new THREE.Color();
+      for (let i = 0; i < N; i++) {
+        const r = 380 + Math.pow(grand(), 0.8) * 420;
+        const a = grand() * Math.PI * 2, b2 = Math.acos(grand() * 2 - 1);
+        pos[i * 3] = r * Math.sin(b2) * Math.cos(a);
+        pos[i * 3 + 1] = r * Math.cos(b2) * 0.75;
+        pos[i * 3 + 2] = r * Math.sin(b2) * Math.sin(a);
+        c.setHSL(0.06 + grand() * 0.55, 0.3, 0.35 + grand() * 0.3);
+        col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+      const pts = new THREE.Points(g, new THREE.PointsMaterial({
+        size: 2.2, map: galDotTex, vertexColors: true, transparent: true,
+        opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending
+      }));
+      pts.frustumCulled = false;
+      superGroup.add(pts);
+    })();
+
+    // 星系团节点（丝状结构交汇处的明亮团块）+ 命名标注
+    const superLabelGroup = new THREE.Group();
+    superGroup.add(superLabelGroup);
+    function superNode(pos, size, warm, opacity) {
+      const g = makeGlowSprite(warm ? 'rgba(255,232,190,0.9)' : 'rgba(214,226,255,0.9)',
+                               warm ? 'rgba(255,190,110,0.3)' : 'rgba(150,180,255,0.3)', size);
+      g.position.copy(pos);
+      g.material.opacity = opacity;
+      superGroup.add(g);
+      return g;
+    }
+    function superLabel(text, pos, size, dy) {
+      const lb = makeGalLabel(text, size);
+      lb.position.copy(pos); lb.position.y += dy;
+      superLabelGroup.add(lb);
+      return lb;
+    }
+    const virgoPos = SUPER_GA.clone().setLength(54);     // 室女座星系团：约 5400 万光年
+    const hydraPos = SUPER_GA.clone().setLength(110);    // 长蛇-半人马超星系团：位于流向巨引源途中
+    superNode(virgoPos, 22, false, 0.42);
+    superNode(hydraPos, 26, true, 0.42);
+    superNode(SUPER_GA, 34, true, 0.5);                  // 巨引源方向（矩尺座星系团密集区）
+    for (let i = 0; i < 14; i++) {                       // 其余交汇处随机小团块
+      const q = filPaths[(grand() * filPaths.length) | 0];
+      if (q.distanceTo(SUPER_GA) < 40 || q.length() < 60) continue;
+      superNode(q, 8 + grand() * 14, grand() < 0.5, 0.18 + grand() * 0.16);
+    }
+    superLabel('室女座星系团 · 本超星系团中心', virgoPos, 15, 12);
+    superLabel('长蛇-半人马超星系团', hydraPos, 15, 14);
+    superLabel('巨引源 · 矩尺座方向', SUPER_GA, 16, 16);
+    superLabel('拉尼亚凯亚超星系团 · 直径约 5.2 亿光年', new THREE.Vector3(-30, 165, 60), 20, 0);
+
+    // 本星系群：银河系（脉动光点 + 标注）+ 仙女座 M31 + 三角座 M33（真实距离量级）
+    const mwMarker = new THREE.Group();
+    mwMarker.add(new THREE.Mesh(new THREE.SphereGeometry(0.5, 16, 16), new THREE.MeshBasicMaterial({ color: 0xffe9b0 })));
+    const mwPulse = makeGlowSprite('rgba(255,240,190,1)', 'rgba(255,200,120,0.4)', 3.2);
+    const mwLabel = makeGalLabel('银河系 · 本星系群', 14);
+    mwLabel.position.set(0, 6, 0);
+    mwMarker.add(mwPulse, mwLabel);
+    superGroup.add(mwMarker);
+    const m31Pos = new THREE.Vector3(1.2, 0.5, -2.05);   // 仙女座星系 M31：约 250 万光年
+    const m33Pos = new THREE.Vector3(2.1, 1.1, -1.4);    // 三角座星系 M33：约 270 万光年
+    superNode(m31Pos, 2.6, false, 0.7);
+    superNode(m33Pos, 1.4, false, 0.6);
+    superLabel('仙女座星系 M31 · 250 万光年', m31Pos, 9, 1.8);
+    superLabel('三角座星系 M33 · 270 万光年', m33Pos, 9, 1.6);
+
+    // 每帧：流动时间驱动 + 银河系标记脉动
+    let supT = 0;
+    function updateSuper(dt) {
+      supT += dt;
+      superShared.uSimT.value = simDays;
+      superShared.uPx.value = renderer.domElement.height / (2 * Math.tan(camera.fov * Math.PI / 360));
+      mwPulse.scale.setScalar(2.6 + Math.sin(supT * 3) * 0.6);
+      mwMarker.getWorldPosition(_sunW);
+    }
+
+    /* ---- 超星系团视角系统：自由 / 俯视 / 侧视 / 本星系群 / 巨引源 ---- */
+    function setSuperView(sv) {
+      if ((sv === superView && !superTrans) || modeAnim) return;
+      superView = sv;
+      document.querySelectorAll('#viewsSuper .btn-view').forEach(b =>
+        b.classList.toggle('active', b.dataset.sv === sv));
+      elSuperView.textContent = document.querySelector(`#viewsSuper .btn-view[data-sv="${sv}"]`).textContent;
+      controls.enabled = false;
+      if (sv === 'local' || sv === 'ga') {
+        controls.minDistance = 0.4; controls.maxDistance = sv === 'local' ? 60 : 200;
+      } else {
+        controls.minDistance = 10; controls.maxDistance = 2600;
+      }
+      camera.up.set(0, 1, 0);
+      superTrans = { t: 0, dur: 1.6, fromPos: camera.position.clone(), fromTarget: controls.target.clone() };
+    }
+    document.querySelectorAll('#viewsSuper .btn-view').forEach(b =>
+      b.addEventListener('click', () => setSuperView(b.dataset.sv)));
+
+    // 任何视角下拖拽画面 = 回到自由视角（保持当前机位，不打断式飞回）
+    renderer.domElement.addEventListener('pointerdown', () => {
+      if (systemMode !== 'super' || modeAnim || superView === 'free' || superTrans) return;
+      superView = 'free'; superTrans = null;
+      controls.enabled = true;
+      controls.minDistance = 2; controls.maxDistance = 2600;
+      document.querySelectorAll('#viewsSuper .btn-view').forEach(b =>
+        b.classList.toggle('active', b.dataset.sv === 'free'));
+      elSuperView.textContent = '自由视角';
+    });
+
+    function superDestPos(out) {
+      if (superView === 'top') return out.set(0, 880, 110);
+      if (superView === 'edge') return out.set(0, 60, 900);
+      if (superView === 'local') return out.copy(_sunW).add(_galDirT.set(2.4, 1.5, 3.2));
+      if (superView === 'ga') return out.copy(SUPER_GA).add(_galDirT.set(16, 9, 22));
+      return out.copy(SUPER_FREE_POS);
+    }
+    function superDestTarget(out) {
+      if (superView === 'local') return out.copy(_sunW);
+      if (superView === 'ga') return out.copy(SUPER_GA);
+      return out.set(0, 0, 0);
+    }
+    function updateSuperCamera(dt) {
+      mwMarker.getWorldPosition(_sunW);
+      if (superTrans) {
+        superTrans.t += dt / superTrans.dur;
+        const k = easeInOut(Math.min(superTrans.t, 1));
+        camera.position.lerpVectors(superTrans.fromPos, superDestPos(_galP), k);
+        controls.target.lerpVectors(superTrans.fromTarget, superDestTarget(_galT), k);
+        camera.lookAt(controls.target);
+        if (superTrans.t >= 1) {
+          superTrans = null;
+          controls.enabled = true;               // 过渡结束释放鼠标
+        }
+        return;
+      }
+      controls.update();
+      const near = (superView === 'local' || superView === 'ga') ? 0.05 : 0.5;
+      if (camera.near !== near) { camera.near = near; camera.far = 30000; camera.updateProjectionMatrix(); }
+    }
+
+    // 结构标注开关
+    let showSuperLabels = true;
+    btnFlow.addEventListener('click', () => {
+      showSuperLabels = !showSuperLabels;
+      superLabelGroup.visible = showSuperLabels;
+      btnFlow.textContent = showSuperLabels ? '结构标注：开' : '结构标注：关';
+      btnFlow.classList.toggle('on', showSuperLabels);
+    });
+
+    // 超星系团状态面板
+    const elSupTime = document.getElementById('vSuperTime');
+    const elSupFlow = document.getElementById('vSuperFlow');
+    function updateSuperHUD() {
+      elSupTime.textContent = (simDays / 365.25 / 1e8).toFixed(2) + ' 亿年';
+      elSupFlow.textContent = (simDays * SUPER_FLOW_V * 100).toFixed(1) + ' 万光年';
+    }
+
+    /* ================================================================
+       宇宙网模拟（MODEL 06）：大尺度结构 · 节点 + 丝状结构 + 空洞
+       —— 1 单位 = 1000 万光年；节点（超星系团/星系团）由丝状结构交错连接，
+          形似大脑神经网络（程序化类比示意）；整个网络按哈勃膨胀缓慢撑开
+    ================================================================ */
+    const cosmicGroup = new THREE.Group();
+    cosmicGroup.visible = false;
+    scene.add(cosmicGroup);
+    let cosT0 = 0;                    // 进入宇宙网时的 simDays 基准（膨胀从 1.0 开始演示）
+    const COSMIC_H = 1.1e-15;         // 膨胀速率（演示用减速示意值：真实哈勃速率在该时间档下过快）
+    const COSMIC_H_CAP = 2.0;         // 膨胀系数上限（长时间播放保持画面稳定）
+    const COSMIC_FLOW = 3e-13;        // 丝内物质流动速度（示意，单位/天）
+    const COSMIC_FREE_POS = new THREE.Vector3(-420, 260, 560);
+    let cosmicView = 'free';
+    let cosmicTrans = null;
+    let _cosScale = 1;
+    const _followPrevC = new THREE.Vector3();
+
+    // 流动着色器：物质沿丝状结构流动（环绕重生、首尾淡入淡出），整体随膨胀系数撑开
+    const cosmicShared = { uSimT: { value: 0 }, uPx: { value: 900 }, uScaleF: { value: 1 } };
+    const COSMIC_VS = `
+      uniform float uSimT, uPx, uScaleF;
+      attribute vec3 aDir, aFlow;
+      attribute float aSize;
+      attribute vec3 aColor;
+      varying vec3 vColor;
+      varying float vFade;
+      void main() {
+        float d = mod(uSimT * aFlow.x + aFlow.z, aFlow.y);        // 沿丝已流距离（环绕重生）
+        float w = d / aFlow.y;
+        vFade = smoothstep(0.0, 0.08, w) * (1.0 - smoothstep(0.72, 1.0, w));
+        vec3 p = (position + aDir * d) * uScaleF;                 // 随哈勃膨胀整体撑开
+        vec4 mv = modelViewMatrix * vec4(p, 1.0);
+        gl_PointSize = min(aSize * uPx / max(-mv.z, 1.0), 12.0);
+        vColor = aColor;
+        gl_Position = projectionMatrix * mv;
+      }`;
+    const COSMIC_FS = `
+      uniform sampler2D uMap; uniform float uOpacity;
+      varying vec3 vColor; varying float vFade;
+      void main() {
+        float a = texture2D(uMap, gl_PointCoord).a * uOpacity * vFade;
+        if (a < 0.02) discard;
+        gl_FragColor = vec4(vColor, a);
+      }`;
+    function makeCosmicFlowPoints(count, fill, opts) {
+      const pos = new Float32Array(count * 3), col = new Float32Array(count * 3);
+      const dir = new Float32Array(count * 3), flow = new Float32Array(count * 3);
+      const size = new Float32Array(count);
+      const p = new THREE.Vector3(), c = new THREE.Color(), d = new THREE.Vector3();
+      for (let i = 0; i < count; i++) {
+        fill(i, p, c, d);
+        const wrap = 20 + grand() * 50;                         // 单段流程长度（丝的局部区段）
+        pos[i * 3] = p.x; pos[i * 3 + 1] = p.y; pos[i * 3 + 2] = p.z;
+        dir[i * 3] = d.x; dir[i * 3 + 1] = d.y; dir[i * 3 + 2] = d.z;
+        flow[i * 3] = COSMIC_FLOW * (0.55 + grand() * 0.9);
+        flow[i * 3 + 1] = wrap;
+        flow[i * 3 + 2] = grand() * wrap;
+        size[i] = (opts.sMin || 1.2) + grand() * ((opts.sMax || 2.2) - (opts.sMin || 1.2));
+        col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      g.setAttribute('aDir', new THREE.BufferAttribute(dir, 3));
+      g.setAttribute('aFlow', new THREE.BufferAttribute(flow, 3));
+      g.setAttribute('aSize', new THREE.BufferAttribute(size, 1));
+      g.setAttribute('aColor', new THREE.BufferAttribute(col, 3));
+      const pts = new THREE.Points(g, new THREE.ShaderMaterial({
+        uniforms: { ...cosmicShared, uMap: { value: galDotTex }, uOpacity: { value: opts.opacity } },
+        vertexShader: COSMIC_VS, fragmentShader: COSMIC_FS,
+        transparent: true, depthWrite: false, blending: THREE.AdditiveBlending
+      }));
+      pts.frustumCulled = false;
+      pts.renderOrder = opts.order || 1;
+      cosmicGroup.add(pts);
+      return pts;
+    }
+
+    // 节点：3 个命名节点 + 61 个围绕 12 个聚集中心散布的节点（成团分布，自然留出空洞）
+    const LAN_POS = new THREE.Vector3(-52, 8, 40);       // 拉尼亚凯亚超星系团（我们所在）
+    const SLOAN_POS = new THREE.Vector3(150, -30, 90);   // 史隆长城：约 14 亿光年
+    const CETUS_POS = new THREE.Vector3(-120, 50, -160); // 双鱼-鲸鱼座超星系团复合体
+    const webNodes = [LAN_POS.clone(), SLOAN_POS.clone(), CETUS_POS.clone()];
+    const _cc = [];
+    for (let k = 0; k < 12; k++) {
+      const r = 60 + grand() * 150, a = grand() * Math.PI * 2, b2 = Math.acos(grand() * 2 - 1);
+      _cc.push(new THREE.Vector3(r * Math.sin(b2) * Math.cos(a), r * Math.cos(b2) * 0.6, r * Math.sin(b2) * Math.sin(a)));
+    }
+    for (let k = 0; k < 61; k++) {
+      const c = _cc[k % 12];
+      webNodes.push(c.clone().add(new THREE.Vector3(gGauss() * 28, gGauss() * 16, gGauss() * 28)));
+    }
+
+    // 连接：每个节点连向最近的 2 个节点（去重）→ 丝状结构（弯曲贝塞尔 + 管内散布点）
+    const edges = [];
+    const _ek = new Set();
+    for (let i = 0; i < webNodes.length; i++) {
+      const near = webNodes.map((q, j) => ({ j, d: i === j ? 1e9 : webNodes[i].distanceToSquared(q) }))
+        .sort((u, v) => u.d - v.d);
+      for (let n = 0; n < 2; n++) {
+        const j = near[n].j, key = i < j ? i + '_' + j : j + '_' + i;
+        if (!_ek.has(key)) { _ek.add(key); edges.push([webNodes[i], webNodes[j]]); }
+      }
+    }
+    const webPtDir = [];
+    for (const e of edges) {
+      const mid = e[0].clone().lerp(e[1], 0.5)
+        .add(new THREE.Vector3(gGauss(), gGauss() * 0.6, gGauss()).multiplyScalar(10));
+      const n = Math.max(18, (e[0].distanceTo(e[1]) / 1.4) | 0);
+      const dir = e[1].clone().sub(e[0]).normalize();
+      for (let i = 0; i < n; i++) {
+        const t = i / (n - 1);
+        const q = new THREE.Vector3()
+          .addScaledVector(e[0], (1 - t) * (1 - t))
+          .addScaledVector(mid, 2 * (1 - t) * t)
+          .addScaledVector(e[1], t * t);
+        q.x += gGauss() * 2.5; q.y += gGauss() * 1.6; q.z += gGauss() * 2.5;
+        webPtDir.push({ p: q, d: dir });
+      }
+    }
+    const _wc1 = new THREE.Color(0xcfdcf8), _wc2 = new THREE.Color(0xbfe8e2), _wc3 = new THREE.Color(0xf2e2c4);
+    makeCosmicFlowPoints(4200, (i, p, c, d) => {   // 丝内星系/物质流
+      const o = webPtDir[(i * 6947) % webPtDir.length];
+      p.copy(o.p); d.copy(o.d);
+      const t = grand();
+      c.copy(t < 0.5 ? _wc1 : t < 0.8 ? _wc2 : _wc3).multiplyScalar(0.4 + grand() * 0.5);
+    }, { sMin: 1.2, sMax: 2.2, opacity: 0.8 });
+    makeCosmicFlowPoints(800, (i, p, c, d) => {    // 亮星系（暖白，更醒目）
+      const o = webPtDir[(i * 4663 + 217) % webPtDir.length];
+      p.copy(o.p); d.copy(o.d);
+      c.setHSL(0.08 + grand() * 0.06, 0.4, 0.62 + grand() * 0.25);
+    }, { sMin: 2.6, sMax: 3.8, opacity: 0.9 });
+
+    // 通用节点辉光（放在随膨胀整体缩放的组内，随网络一起撑开）
+    const webNodesGroup = new THREE.Group();
+    cosmicGroup.add(webNodesGroup);
+    for (let i = 3; i < webNodes.length; i++) {   // 前 3 个为命名节点，单独处理
+      const g = makeGlowSprite('rgba(210,224,255,0.9)', 'rgba(140,170,255,0.3)', 4 + grand() * 6);
+      g.position.copy(webNodes[i]);
+      g.material.opacity = 0.14 + grand() * 0.16;
+      webNodesGroup.add(g);
+    }
+
+    // 远景背景星系（静态壳层，营造纵深）
+    (() => {
+      const N = 1400, pos = new Float32Array(N * 3), col = new Float32Array(N * 3);
+      const c = new THREE.Color();
+      for (let i = 0; i < N; i++) {
+        const r = 340 + Math.pow(grand(), 0.8) * 400;
+        const a = grand() * Math.PI * 2, b2 = Math.acos(grand() * 2 - 1);
+        pos[i * 3] = r * Math.sin(b2) * Math.cos(a);
+        pos[i * 3 + 1] = r * Math.cos(b2) * 0.8;
+        pos[i * 3 + 2] = r * Math.sin(b2) * Math.sin(a);
+        c.setHSL(0.06 + grand() * 0.55, 0.3, 0.32 + grand() * 0.28);
+        col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+      const pts = new THREE.Points(g, new THREE.PointsMaterial({
+        size: 2.0, map: galDotTex, vertexColors: true, transparent: true,
+        opacity: 0.45, depthWrite: false, blending: THREE.AdditiveBlending
+      }));
+      pts.frustumCulled = false;
+      cosmicGroup.add(pts);
+    })();
+
+    // 命名节点（位置随膨胀逐帧更新 = p0 × 膨胀系数）+ 标注
+    const cosmicLabelGroup = new THREE.Group();   // 通用标注（空洞等）
+    cosmicGroup.add(cosmicLabelGroup);
+    function cosmicNamed(pos0, glowSize, warm, opacity) {
+      const grp = new THREE.Group();
+      const g = makeGlowSprite(warm ? 'rgba(255,232,190,0.95)' : 'rgba(214,226,255,0.9)',
+                               warm ? 'rgba(255,190,110,0.35)' : 'rgba(150,180,255,0.3)', glowSize);
+      g.material.opacity = opacity;
+      grp.add(g);
+      grp.userData.p0 = pos0.clone();
+      cosmicGroup.add(grp);
+      return grp;
+    }
+    const lanMarker = cosmicNamed(LAN_POS, 12, true, 0.6);
+    const lanPulse = makeGlowSprite('rgba(255,240,190,1)', 'rgba(255,200,120,0.4)', 6);
+    const lanLabel = makeGalLabel('拉尼亚凯亚超星系团 · 我们所在', 16);
+    lanLabel.position.set(0, 14, 0);
+    lanMarker.add(lanPulse, lanLabel);
+    const sloanMarker = cosmicNamed(SLOAN_POS, 16, false, 0.4);
+    const sloanLabel = makeGalLabel('史隆长城 · 约 14 亿光年', 13);
+    sloanLabel.position.set(0, 15, 0);
+    sloanMarker.add(sloanLabel);
+    const cetusMarker = cosmicNamed(CETUS_POS, 16, false, 0.4);
+    const cetusLabel = makeGalLabel('双鱼-鲸鱼座超星系团复合体', 13);
+    cetusLabel.position.set(0, 15, 0);
+    cetusMarker.add(cetusLabel);
+    const voidLabel = makeGalLabel('牧夫座空洞 · 巨大虚空', 13);
+    voidLabel.position.set(-70, -62, 110);
+    cosmicLabelGroup.add(voidLabel);
+
+    // 每帧：膨胀驱动（节点/标注随 a 撑开）+ 丝内流动 + 标记脉动
+    let cosT = 0;
+    function updateCosmic(dt) {
+      cosT += dt;
+      const cd = Math.max(simDays - cosT0, 0);
+      _cosScale = Math.min(Math.exp(COSMIC_H * cd), COSMIC_H_CAP);
+      cosmicShared.uSimT.value = cd;
+      cosmicShared.uScaleF.value = _cosScale;
+      cosmicShared.uPx.value = renderer.domElement.height / (2 * Math.tan(camera.fov * Math.PI / 360));
+      webNodesGroup.scale.setScalar(_cosScale);
+      lanMarker.position.copy(lanMarker.userData.p0).multiplyScalar(_cosScale);
+      sloanMarker.position.copy(sloanMarker.userData.p0).multiplyScalar(_cosScale);
+      cetusMarker.position.copy(cetusMarker.userData.p0).multiplyScalar(_cosScale);
+      lanPulse.scale.setScalar(5 + Math.sin(cosT * 2.6) * 1.2);
+      lanMarker.getWorldPosition(_sunW);
+    }
+
+    /* ---- 宇宙网视角系统：自由 / 俯视 / 侧视 / 拉尼亚凯亚 ---- */
+    function setCosmicView(cv) {
+      if ((cv === cosmicView && !cosmicTrans) || modeAnim) return;
+      cosmicView = cv;
+      document.querySelectorAll('#viewsCosmic .btn-view').forEach(b =>
+        b.classList.toggle('active', b.dataset.cv === cv));
+      elCosView.textContent = document.querySelector(`#viewsCosmic .btn-view[data-cv="${cv}"]`).textContent;
+      controls.enabled = false;
+      if (cv === 'lan') {
+        controls.minDistance = 0.8; controls.maxDistance = 80;
+      } else {
+        controls.minDistance = 10; controls.maxDistance = 2600;
+      }
+      camera.up.set(0, 1, 0);
+      cosmicTrans = { t: 0, dur: 1.6, fromPos: camera.position.clone(), fromTarget: controls.target.clone() };
+    }
+    document.querySelectorAll('#viewsCosmic .btn-view').forEach(b =>
+      b.addEventListener('click', () => setCosmicView(b.dataset.cv)));
+
+    // 任何视角下拖拽画面 = 回到自由视角（保持当前机位，不打断式飞回）
+    renderer.domElement.addEventListener('pointerdown', () => {
+      if (systemMode !== 'cosmic' || modeAnim || cosmicView === 'free' || cosmicTrans) return;
+      cosmicView = 'free'; cosmicTrans = null;
+      controls.enabled = true;
+      controls.minDistance = 2; controls.maxDistance = 2600;
+      document.querySelectorAll('#viewsCosmic .btn-view').forEach(b =>
+        b.classList.toggle('active', b.dataset.cv === 'free'));
+      elCosView.textContent = '自由视角';
+    });
+
+    function cosmicDestPos(out) {
+      if (cosmicView === 'top') return out.set(0, 780, 100);
+      if (cosmicView === 'edge') return out.set(0, 55, 800);
+      if (cosmicView === 'lan') return out.copy(_sunW).add(_galDirT.set(6, 3.5, 8));
+      return out.copy(COSMIC_FREE_POS);
+    }
+    function cosmicDestTarget(out) {
+      if (cosmicView === 'lan') return out.copy(_sunW);
+      return out.set(0, 0, 0);
+    }
+    function updateCosmicCamera(dt) {
+      lanMarker.getWorldPosition(_sunW);
+      if (cosmicTrans) {
+        cosmicTrans.t += dt / cosmicTrans.dur;
+        const k = easeInOut(Math.min(cosmicTrans.t, 1));
+        camera.position.lerpVectors(cosmicTrans.fromPos, cosmicDestPos(_galP), k);
+        controls.target.lerpVectors(cosmicTrans.fromTarget, cosmicDestTarget(_galT), k);
+        camera.lookAt(controls.target);
+        if (cosmicTrans.t >= 1) {
+          cosmicTrans = null;
+          controls.enabled = true;               // 过渡结束释放鼠标
+          if (cosmicView === 'lan') _followPrevC.copy(_sunW);
+        }
+        return;
+      }
+      if (cosmicView === 'lan') {
+        // 拉尼亚凯亚节点随膨胀缓慢移动：相机与目标跟随平移，拖拽/滚轮可用
+        _followDelta.copy(_sunW).sub(_followPrevC);
+        camera.position.add(_followDelta);
+        controls.target.copy(_sunW);
+        _followPrevC.copy(_sunW);
+      }
+      controls.update();
+      const near = cosmicView === 'lan' ? 0.05 : 0.5;
+      if (camera.near !== near) { camera.near = near; camera.far = 30000; camera.updateProjectionMatrix(); }
+    }
+
+    // 网络标注开关
+    let showWebLabels = true;
+    btnWeb.addEventListener('click', () => {
+      showWebLabels = !showWebLabels;
+      cosmicLabelGroup.visible = showWebLabels;
+      lanLabel.visible = showWebLabels;
+      sloanLabel.visible = showWebLabels;
+      cetusLabel.visible = showWebLabels;
+      btnWeb.textContent = showWebLabels ? '网络标注：开' : '网络标注：关';
+      btnWeb.classList.toggle('on', showWebLabels);
+    });
+
+    // 宇宙网状态面板
+    const elCosTime = document.getElementById('vCosTime');
+    const elCosScale = document.getElementById('vCosScale');
+    function updateCosmicHUD() {
+      elCosTime.textContent = (Math.max(simDays - cosT0, 0) / 365.25 / 1e8).toFixed(2) + ' 亿年';
+      elCosScale.textContent = '×' + _cosScale.toFixed(3) + (_cosScale >= COSMIC_H_CAP ? ' · 已稳定' : '');
+    }
+
+    /* ================================================================
+       主循环
+    ================================================================ */
+    const clock = new THREE.Clock();
+    let hudTimer = 0;
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = Math.min(clock.getDelta(), 0.05);
+
+      if (playing) {
+        simDays += dt * BASE_RATE * speedMul;
+        updateBodies();
+        updateSatellites();
+      }
+
+      updateSystemMode();   // 太阳/地球/行星位置（含体系过渡插值）
+
+      if (modeAnim) updateModeAnim(dt);          // 体系切换过渡中
+      else if (systemMode === 'ground') updateGroundCamera(dt); // 地表观测：自定义视线控制
+      else if (systemMode === 'solar') updateSolarCamera(dt);   // 太阳系模式：自由/俯视/行星近景
+      else if (systemMode === 'galaxy') updateGalaxyCamera(dt); // 银河系模式：自由/俯视/侧视/银心/太阳位置
+      else if (systemMode === 'super') updateSuperCamera(dt);   // 超星系团模式：自由/俯视/侧视/本星系群/巨引源
+      else if (systemMode === 'cosmic') updateCosmicCamera(dt); // 宇宙网模式：自由/俯视/侧视/拉尼亚凯亚
+      else updateCamera(dt);
+      if (systemMode === 'ground' && !modeAnim) updateGroundSky(dt);
+      if (galaxyGroup.visible) updateGalaxy(dt);   // 银河自转 + 吸积盘 + 标记脉冲
+      if (superGroup.visible) updateSuper(dt);     // 巨引源流动 + 本星系群标记脉冲
+      if (cosmicGroup.visible) updateCosmic(dt);   // 哈勃膨胀 + 丝内流动 + 标记脉冲
+      updateLabels();
+
+      hudTimer += dt;
+      if (hudTimer > 0.12) { hudTimer = 0; updateHUD(); }
+
+      renderer.render(scene, camera);
+      drawSunIndicator();
+    }
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    updateBodies();
+    updateSatellites();
+    updateSystemMode();
+    updateHUD();
+    drawSunIndicator();
+
+    // 调试接口（浏览器控制台可用 __ww() 查看渲染状态）
+    window.__ww = () => ({
+      view,
+      systemMode,
+      modeBlend: +modeBlend.toFixed(3),
+      fov: +camera.fov.toFixed(2),
+      camPos: camera.position.toArray().map(v => +v.toFixed(1)),
+      moonPos: moonWorld().toArray().map(v => +v.toFixed(2)),
+      groundLoc: GROUND_LOCS[groundLoc].name,
+      groundAimDeg: [+(groundYaw / DEG).toFixed(1), +(groundPitch / DEG).toFixed(1)],
+      groundSunAltDeg: +(groundSunAlt / DEG).toFixed(2),
+      texturesLoaded: `${texDone}/${texTotal}`,
+      satellites: satNodes.length,
+      showSats,
+      planets: planetNodes.length
+    });
+
+    animate();
+  </script>
+</body>
+</html>

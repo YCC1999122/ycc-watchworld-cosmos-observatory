@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WatchWorld · 天体模型观测台</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    min-height: 100vh;
+    font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+    background:
+      radial-gradient(ellipse 1200px 700px at 75% -10%, rgba(56, 97, 200, 0.22), transparent 60%),
+      radial-gradient(ellipse 900px 600px at 10% 110%, rgba(14, 116, 144, 0.16), transparent 60%),
+      #0b0f1a;
+    color: #e8edf7;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 24px;
+    overflow-x: hidden;
+  }
+
+  /* ---- 背景星空 ---- */
+  .stars {
+    position: fixed; inset: 0;
+    pointer-events: none;
+    background-image:
+      radial-gradient(1.2px 1.2px at 12% 22%, rgba(255,255,255,.8), transparent),
+      radial-gradient(1px 1px at 34% 68%, rgba(255,255,255,.5), transparent),
+      radial-gradient(1.4px 1.4px at 56% 14%, rgba(255,255,255,.7), transparent),
+      radial-gradient(1px 1px at 72% 48%, rgba(255,255,255,.45), transparent),
+      radial-gradient(1.6px 1.6px at 88% 78%, rgba(255,255,255,.65), transparent),
+      radial-gradient(1px 1px at 22% 86%, rgba(255,255,255,.4), transparent),
+      radial-gradient(1.2px 1.2px at 64% 92%, rgba(255,255,255,.55), transparent),
+      radial-gradient(1px 1px at 46% 38%, rgba(255,255,255,.35), transparent),
+      radial-gradient(1.3px 1.3px at 94% 18%, rgba(255,255,255,.6), transparent),
+      radial-gradient(1px 1px at 6% 58%, rgba(255,255,255,.4), transparent);
+  }
+
+  /* ---- 头部 ---- */
+  header { text-align: center; margin-bottom: 56px; position: relative; z-index: 1; }
+
+  .eyebrow {
+    display: inline-block;
+    font-size: 12px;
+    letter-spacing: 6px;
+    text-transform: uppercase;
+    color: #7ea6e0;
+    margin-bottom: 14px;
+  }
+
+  h1 {
+    font-size: 40px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    background: linear-gradient(120deg, #dbe7ff 20%, #6ea8ff 55%, #4dd6e8 90%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .subtitle {
+    margin-top: 12px;
+    font-size: 14px;
+    color: #8b96ad;
+    letter-spacing: 1px;
+  }
+
+  /* ---- 模型卡片 ---- */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 28px;
+    width: 100%;
+    max-width: 720px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .card {
+    position: relative;
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    border-radius: 18px;
+    padding: 1px;
+    background: linear-gradient(150deg, rgba(110, 168, 255, 0.45), rgba(77, 214, 232, 0.12) 40%, rgba(110, 168, 255, 0.08));
+    transition: transform 0.35s cubic-bezier(.22,.68,.34,1), box-shadow 0.35s;
+  }
+
+  .card:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 18px 48px rgba(64, 120, 220, 0.28);
+  }
+
+  .card-inner {
+    height: 100%;
+    border-radius: 17px;
+    background: linear-gradient(160deg, rgba(18, 26, 46, 0.92), rgba(12, 17, 32, 0.94));
+    padding: 30px 28px 26px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .card-inner::before {
+    content: "";
+    position: absolute;
+    width: 180px; height: 180px;
+    border-radius: 50%;
+    right: -60px; top: -60px;
+    background: radial-gradient(circle at 35% 35%, rgba(96, 150, 255, 0.25), transparent 70%);
+    transition: transform 0.5s;
+  }
+
+  .card:hover .card-inner::before { transform: scale(1.25); }
+
+  .num {
+    font-size: 12px;
+    letter-spacing: 3px;
+    color: #5f87c9;
+    margin-bottom: 14px;
+  }
+
+  .card h2 {
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+    color: #eaf1ff;
+  }
+
+  .card p {
+    font-size: 13px;
+    line-height: 1.8;
+    color: #93a0b8;
+  }
+
+  .tags { margin-top: 18px; display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .tag {
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    color: #8fb6f0;
+    background: rgba(94, 140, 220, 0.12);
+    border: 1px solid rgba(94, 140, 220, 0.25);
+    letter-spacing: 1px;
+  }
+
+  .enter {
+    margin-top: 22px;
+    font-size: 13px;
+    color: #6ea8ff;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: gap 0.25s;
+  }
+
+  .card:hover .enter { gap: 12px; }
+
+  /* ---- 占位卡片（后续模型） ---- */
+  .card.placeholder { opacity: 0.45; pointer-events: none; }
+
+  footer {
+    margin-top: 64px;
+    font-size: 12px;
+    color: #5a6478;
+    letter-spacing: 2px;
+    position: relative;
+    z-index: 1;
+  }
+</style>
+</head>
+<body>
+  <div class="stars"></div>
+
+  <header>
+    <span class="eyebrow">WatchWorld</span>
+    <h1>天体模型观测台</h1>
+    <div class="subtitle">以不同视角理解天体系统的运动与状态</div>
+  </header>
+
+  <div class="grid">
+    <a class="card" href="models/earth-moon/index.html">
+      <div class="card-inner">
+        <div class="num">MODEL 01</div>
+        <h2>地月系统</h2>
+        <p>以 1:1 真实比例模拟地月系统：月球沿真实椭圆轨道运动（含偏心率与轨道倾角），地球昼夜、云层与大气基于 NASA 真实纹理渲染，背景为银河系全景。支持地心观测、俯视全景与月球特写视角。</p>
+        <div class="tags">
+          <span class="tag">1:1 真实比例</span>
+          <span class="tag">月相</span>
+          <span class="tag">椭圆轨道</span>
+          <span class="tag">银河系背景</span>
+        </div>
+        <span class="enter">进入模型 →</span>
+      </div>
+    </a>
+
+    <a class="card placeholder">
+      <div class="card-inner">
+        <div class="num">MODEL 02</div>
+        <h2>待添加</h2>
+        <p>后续模型将在此处加入，例如太阳系行星系统、地心说与日心说视角对比等。</p>
+        <div class="tags">
+          <span class="tag">规划中</span>
+        </div>
+        <span class="enter">敬请期待 →</span>
+      </div>
+    </a>
+  </div>
+
+  <footer>WATCHWORLD · A JOURNEY THROUGH CELESTIAL MODELS</footer>
+</body>
+</html>

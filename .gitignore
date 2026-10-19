@@ -1,0 +1,5 @@
+# 临时/本地文件不上传
+ww_extract.*
+ww_*.mjs
+*.log
+Thumbs.db
