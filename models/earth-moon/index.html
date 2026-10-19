@@ -18,33 +18,138 @@
   #app { position: fixed; inset: 0; }
   #app canvas { display: block; }
 
-  /* ============ 加载遮罩 ============ */
+  /* ============ 加载遮罩（YCC 品牌 + 标注风格） ============ */
   .loading {
     position: fixed;
     inset: 0;
     z-index: 100;
-    background: #05070d;
+    background:
+      radial-gradient(ellipse 900px 600px at 50% 30%, rgba(56, 97, 200, 0.12), transparent 65%),
+      #05070d;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 18px;
+    gap: 22px;
     transition: opacity 0.8s;
   }
 
   .loading.hide { opacity: 0; pointer-events: none; }
 
-  .spinner {
-    width: 34px; height: 34px;
-    border-radius: 50%;
-    border: 3px solid rgba(110, 168, 255, 0.18);
-    border-top-color: #6ea8ff;
-    animation: spin 0.9s linear infinite;
+  /* 中央舞台：四角标注括号 + 双虚线环 + YCC */
+  .ld-stage {
+    position: relative;
+    width: 230px; height: 230px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
-  @keyframes spin { to { transform: rotate(360deg); } }
+  .ld-corner {
+    position: absolute;
+    width: 26px; height: 26px;
+    border: 1.5px solid rgba(110, 168, 255, 0.65);
+    opacity: 0;
+    animation: ldCornerIn 0.9s cubic-bezier(.22,.68,.34,1) 0.15s forwards;
+  }
+  .ld-corner.c1 { top: 0; left: 0; border-right: none; border-bottom: none; }
+  .ld-corner.c2 { top: 0; right: 0; border-left: none; border-bottom: none; }
+  .ld-corner.c3 { bottom: 0; left: 0; border-right: none; border-top: none; }
+  .ld-corner.c4 { bottom: 0; right: 0; border-left: none; border-top: none; }
 
-  .loading .txt { font-size: 12px; letter-spacing: 3px; color: #7ea6e0; }
+  @keyframes ldCornerIn {
+    from { opacity: 0; transform: scale(1.35); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+
+  .ld-ring {
+    position: absolute;
+    inset: 26px;
+    border-radius: 50%;
+    border: 1px dashed rgba(110, 168, 255, 0.35);
+    animation: ldSpin 14s linear infinite;
+  }
+  .ld-ring.r2 {
+    inset: 44px;
+    border-color: rgba(77, 214, 232, 0.28);
+    animation: ldSpinR 9s linear infinite;
+  }
+
+  @keyframes ldSpin  { to { transform: rotate(360deg); } }
+  @keyframes ldSpinR { to { transform: rotate(-360deg); } }
+
+  .ld-brand {
+    font-size: 54px;
+    font-weight: 600;
+    letter-spacing: 14px;
+    text-indent: 14px;
+    background: linear-gradient(110deg, #e6eeff 25%, #6ea8ff 70%, #4dd6e8 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 0 34px rgba(110, 168, 255, 0.25);
+    opacity: 0;
+    animation: ldBrandIn 1s cubic-bezier(.22,.68,.34,1) 0.3s forwards,
+               ldGlow 2.6s ease-in-out 1.3s infinite alternate;
+  }
+
+  @keyframes ldBrandIn {
+    from { opacity: 0; letter-spacing: 30px; text-indent: 30px; }
+    to   { opacity: 1; letter-spacing: 14px; text-indent: 14px; }
+  }
+  @keyframes ldGlow {
+    from { filter: brightness(1); }
+    to   { filter: brightness(1.28); }
+  }
+
+  /* 扫描线横过舞台 */
+  .ld-scan {
+    position: absolute;
+    left: 8%; right: 8%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(77, 214, 232, 0.75), transparent);
+    box-shadow: 0 0 12px rgba(77, 214, 232, 0.5);
+    animation: ldScan 2.4s ease-in-out infinite;
+  }
+
+  @keyframes ldScan {
+    0%, 100% { top: 12%; opacity: 0; }
+    12%      { opacity: 1; }
+    50%      { top: 88%; opacity: 1; }
+    62%      { opacity: 0; }
+  }
+
+  .ld-title {
+    font-size: 11px;
+    letter-spacing: 6px;
+    color: #7ea6e0;
+  }
+
+  /* 进度条 */
+  .ld-bar {
+    width: 230px; height: 3px;
+    border-radius: 3px;
+    background: rgba(110, 168, 255, 0.14);
+    overflow: hidden;
+  }
+
+  .ld-fill {
+    width: 0%; height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, #3b82f6, #4dd6e8);
+    box-shadow: 0 0 10px rgba(77, 214, 232, 0.55);
+    transition: width 0.25s ease;
+  }
+
+  .ld-meta {
+    width: 230px;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+
+  .ld-meta .ld-txt { font-size: 10px; letter-spacing: 2px; color: #5f6b84; }
+  .ld-meta .ld-pct { font-size: 11px; color: #8fb6f0; font-variant-numeric: tabular-nums; }
 
   /* ============ 玻璃面板通用 ============ */
   .glass {
@@ -473,10 +578,111 @@
     z-index: 50;
   }
 
+  /* 折叠箭头：桌面端隐藏，面板恒展开 */
+  .status .fold-ic { display: none; }
+
   @media (max-width: 960px) {
     .status { width: 200px; padding: 14px; }
     .scale-note { display: none; }
     .hint { display: none; }
+  }
+
+  /* ============ 手机端适配 ============ */
+  @media (max-width: 720px) {
+    /* 体系切换：顶部整行横向滑动 */
+    .mode-bar {
+      top: 8px; left: 8px; right: 8px;
+      gap: 6px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      padding-bottom: 2px;
+    }
+    .mode-bar::-webkit-scrollbar { display: none; }
+    .btn-mode {
+      padding: 7px 11px;
+      font-size: 10px;
+      letter-spacing: 1px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    /* 标题栏缩小，移到切换栏下方 */
+    .topbar { top: 46px; left: 8px; padding: 6px 10px 6px 8px; gap: 8px; }
+    .back { width: 24px; height: 24px; font-size: 12px; border-radius: 7px; }
+    .title-block .t1 { font-size: 12px; }
+    .title-block .t2 { font-size: 8px; letter-spacing: 2px; }
+
+    /* 状态面板：默认折叠成胶囊，展开时紧凑且限高可滚动 */
+    .status {
+      top: 46px; right: 8px;
+      width: 176px;
+      padding: 10px 12px;
+      max-height: calc(100vh - 150px);
+      overflow-y: auto;
+      scrollbar-width: thin;
+    }
+    .status.collapsed { width: auto; padding: 8px 12px; overflow: visible; }
+    .status h3 { font-size: 10px; letter-spacing: 2px; margin-bottom: 0; cursor: pointer; }
+    .status:not(.collapsed) h3 { margin-bottom: 10px; }
+    .status .fold-ic {
+      display: block;
+      margin-left: auto;
+      font-size: 11px;
+      color: #7ea6e0;
+      transition: transform 0.25s;
+    }
+    .status.collapsed .fold-ic { transform: rotate(-90deg); }
+    .status.collapsed > *:not(h3) { display: none !important; }  /* 压过 JS 内联 display（如 satNote） */
+    .row { padding: 5px 0; }
+    .row .k { font-size: 10px; }
+    .row .v { font-size: 11px; }
+    .row .v em { font-size: 9px; }
+    .phase-box, .sun-box { gap: 10px; padding: 8px 0 4px; }
+    #phaseCanvas, #sunCanvas { width: 42px; height: 42px; }
+    .phase-info .name { font-size: 13px; }
+    .phase-info .pct { font-size: 9px; }
+    .note { font-size: 8px; line-height: 1.6; }
+
+    /* 底部控制条：等比缩小 + 限高可滚动，避免遮挡场景 */
+    .controls {
+      bottom: 8px;
+      gap: 8px; row-gap: 6px;
+      padding: 8px 10px;
+      max-width: 96vw;
+      max-height: 32vh;
+      overflow-y: auto;
+      scrollbar-width: thin;
+    }
+    .btn-play { width: 32px; height: 32px; font-size: 12px; border-radius: 10px; }
+    .speed { min-width: 96px; gap: 3px; }
+    .speed label { font-size: 8px; letter-spacing: 1px; }
+    input[type="range"]::-webkit-slider-thumb { width: 13px; height: 13px; }
+    .divider { display: none; }
+    .btn-view, .btn-toggle {
+      padding: 6px 8px;
+      font-size: 9px;
+      letter-spacing: 0.5px;
+      border-radius: 8px;
+    }
+
+    /* 快速定位：挪到左侧中部，避开底部控制条 */
+    #groundLocs {
+      right: auto; left: 8px;
+      bottom: auto; top: 52%;
+      max-width: 42vw;
+      padding: 8px;
+      justify-content: flex-start;
+    }
+    #groundLocs .loc-title { text-align: left; font-size: 8px; }
+
+    /* 转场标题缩小防溢出 */
+    .veil-title { font-size: 20px; letter-spacing: 8px; text-indent: 8px; }
+    .veil-sub { font-size: 8px; letter-spacing: 2px; padding: 0 24px; line-height: 1.8; }
+
+    /* 加载动画整体略缩 */
+    .ld-stage { width: 190px; height: 190px; }
+    .ld-brand { font-size: 42px; }
+    .ld-title { font-size: 9px; letter-spacing: 4px; }
   }
 </style>
 </head>
@@ -485,8 +691,19 @@
   <div id="app"></div>
 
   <div class="loading" id="loading">
-    <div class="spinner"></div>
-    <div class="txt">正在加载真实天文纹理 · 1:1 比例</div>
+    <div class="ld-stage">
+      <i class="ld-corner c1"></i><i class="ld-corner c2"></i><i class="ld-corner c3"></i><i class="ld-corner c4"></i>
+      <div class="ld-ring"></div>
+      <div class="ld-ring r2"></div>
+      <div class="ld-brand">YCC</div>
+      <div class="ld-scan"></div>
+    </div>
+    <div class="ld-title">WATCHWORLD · COSMOS OBSERVATORY</div>
+    <div class="ld-bar"><div class="ld-fill" id="ldFill"></div></div>
+    <div class="ld-meta">
+      <span class="ld-txt">正在加载真实天文纹理 · 1:1 比例</span>
+      <span class="ld-pct" id="ldPct">0%</span>
+    </div>
   </div>
 
   <div class="webgl-fallback" id="fallback">
@@ -746,22 +963,52 @@
     controls.minDistance = 1.45;
     controls.maxDistance = 30000;
 
+    /* 状态面板折叠：手机端默认收起成标题胶囊，点击标题展开；桌面端恒展开 */
+    const mqMobile = window.matchMedia('(max-width: 720px)');
+    document.querySelectorAll('.status').forEach(st => {
+      const h3 = st.querySelector('h3');
+      if (!h3) return;
+      const ic = document.createElement('span');
+      ic.className = 'fold-ic';
+      ic.textContent = '▾';
+      h3.appendChild(ic);
+      h3.addEventListener('click', () => st.classList.toggle('collapsed'));
+    });
+    function syncFold() {
+      document.querySelectorAll('.status').forEach(st => st.classList.toggle('collapsed', mqMobile.matches));
+    }
+    syncFold();
+    mqMobile.addEventListener('change', syncFold);
+
     /* ================================================================
        真实纹理加载
     ================================================================ */
     const loader = new THREE.TextureLoader();
     let texTotal = 0, texDone = 0;
     const loadingEl = document.getElementById('loading');
+    const ldFill = document.getElementById('ldFill');
+    const ldPct = document.getElementById('ldPct');
+    const ldT0 = performance.now();
+    let ldDone = false;
+
+    // 纹理每完成一张更新一次进度；全部完成后保证开场动画至少完整呈现再淡出
+    function texStep() {
+      texDone++;
+      const p = texTotal ? Math.round(texDone / texTotal * 100) : 0;
+      ldFill.style.width = p + '%';
+      ldPct.textContent = p + '%';
+      if (texDone >= texTotal && !ldDone) {
+        ldDone = true;
+        const wait = Math.max(0, 1400 - (performance.now() - ldT0));
+        setTimeout(() => loadingEl.classList.add('hide'), wait);
+      }
+    }
 
     function loadTex(file, srgb = true) {
       texTotal++;
-      const tex = loader.load(`assets/${file}`, () => {
-        texDone++;
-        if (texDone >= texTotal) loadingEl.classList.add('hide');
-      }, undefined, () => {
-        texDone++;
+      const tex = loader.load(`assets/${file}`, texStep, undefined, () => {
         console.warn(`texture failed to load: ${file}`);
-        if (texDone >= texTotal) loadingEl.classList.add('hide');
+        texStep();
       });
       if (srgb) tex.colorSpace = THREE.SRGBColorSpace;
       tex.anisotropy = maxAniso;
